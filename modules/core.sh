@@ -157,6 +157,93 @@ get_monitor_interface() {
     return 1
 }
 
+# Get all ethernet/wired interfaces (for internet connectivity)
+get_ethernet_interfaces() {
+    ip link show | grep -E "^[0-9]+: (eth|enp|ens|eno|br)" | awk '{print $2}' | tr -d ':' | grep -v "^lo$"
+}
+
+# Get first available ethernet interface
+get_first_ethernet_interface() {
+    local first=$(get_ethernet_interfaces | head -1)
+    echo "${first:-}"
+}
+
+# Get internet interface (for NAT/forwarding in attacks)
+get_internet_interface() {
+    # First check if INTERNET_INTERFACE is set and valid
+    if [[ -n "$INTERNET_INTERFACE" ]] && ip link show "$INTERNET_INTERFACE" &>/dev/null; then
+        echo "$INTERNET_INTERFACE"
+        return 0
+    fi
+
+    # Try to find the default route interface (most likely has internet)
+    local default_iface=$(ip route | grep "^default" | head -1 | awk '{print $5}')
+    if [[ -n "$default_iface" ]] && [[ "$default_iface" != "lo" ]]; then
+        echo "$default_iface"
+        return 0
+    fi
+
+    # Fallback to first ethernet interface
+    local eth_iface=$(get_first_ethernet_interface)
+    if [[ -n "$eth_iface" ]]; then
+        echo "$eth_iface"
+        return 0
+    fi
+
+    # No internet interface found
+    return 1
+}
+
+# Interactively select internet interface
+select_internet_interface() {
+    local available=$(get_ethernet_interfaces)
+
+    if [[ -z "$available" ]]; then
+        echo -e "${YELLOW}[!] No ethernet interfaces found${NC}"
+        echo -e "${YELLOW}[!] Attacks requiring internet may not work${NC}"
+        return 1
+    fi
+
+    echo -e "${WHITE}Available internet interfaces:${NC}"
+    local count=0
+    local iface_array=()
+
+    for iface in $available; do
+        count=$((count + 1))
+        iface_array+=("$iface")
+
+        # Check if interface has an IP
+        local ip=$(ip addr show "$iface" 2>/dev/null | grep "inet " | awk '{print $2}' | cut -d'/' -f1 | head -1)
+        local status="down"
+        if ip link show "$iface" 2>/dev/null | grep -q "state UP"; then
+            status="up"
+        fi
+
+        if [[ -n "$ip" ]]; then
+            echo -e "  ${CYAN}[$count]${NC} $iface ${GREEN}($status, IP: $ip)${NC}"
+        else
+            echo -e "  ${CYAN}[$count]${NC} $iface ${GRAY}($status, no IP)${NC}"
+        fi
+    done
+
+    echo ""
+    if [[ $count -eq 1 ]]; then
+        echo "${iface_array[0]}"
+        return 0
+    fi
+
+    read -p "Select internet interface (1-$count) [1]: " selection
+    selection="${selection:-1}"
+
+    if [[ ! "$selection" =~ ^[0-9]+$ ]] || [[ $selection -lt 1 ]] || [[ $selection -gt $count ]]; then
+        echo -e "${RED}[!] Invalid selection${NC}"
+        return 1
+    fi
+
+    echo "${iface_array[$((selection - 1))]}"
+    return 0
+}
+
 # Get monitor interfaces
 get_monitor_interfaces() {
     iwconfig 2>/dev/null | grep "Mode:Monitor" | awk '{print $1}'
