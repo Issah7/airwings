@@ -1,0 +1,43 @@
+[34mScan Results:[0m
+[90m=============[0m
+\e[97mBSSID                Channel  Power    Encryption      ESSID               \e[0m
+[90m-----------------------------------------------------[0m
+BSSID                 channel  Power    Privacy         ESSID              
+E8:65:D4:31:3D:58      1       -67      WPA2            Shammy             
+D8:32:14:5C:B8:48      1       -86      WPA2            Claire Jeroo       
+50:0F:F5:D4:53:78      2       -75      WPA2            Wayne              
+CC:2D:21:B9:59:C8      1         0      WPA2            Chris              
+C8:3A:35:42:F7:F8      1       -86      WPA2            Blessed            
+50:0F:F5:99:68:E0      1        -1      WPA                                
+F4:2A:7D:54:1F:11      1       -83      OPN             KONNECT            
+B4:09:31:08:27:48      6       -66      WPA2 WPA        EmmaG              
+B4:09:31:08:27:49      6       -63      OPN             SILVER NETWORKS    
+C8:3A:35:35:A0:C0      9       -79      WPA2 WPA        SIR RAY            
+04:95:E6:F4:BA:20      7       -90      WPA2            Mily               
+F0:25:8E:AB:FD:4D      8       -62      WPA2            PASSWORD:12345678  
+F0:25:8E:AB:FD:4C      8       -62      WPA2            CATE               
+0C:80:63:7D:26:C2     11       -42      WPA2            KALINITECH         
+                                                                          
+32:24:C7:83:2A:D5     -79               (not associated)                      
+D2:1C:D9:AA:63:68     -95               D8:32:14:5C:B8:48                     
+EE:25:29:25:C4:72     -86               E8:65:D4:31:3D:58                     
+1A:07:F7:71:FB:F8     -87               C8:3A:35:42:F7:F8                     
+FE:62:BE:7A:B4:05     -83               CC:2D:21:B9:59:C8                     
+74:60:FA:00:12:6D     -91               CC:2D:21:B9:59:C8                     
+20:4E:F6:85:BA:B1     -95               50:0F:F5:99:68:E0                     
+E6:75:7C:0A:21:25     -95               50:0F:F5:D4:53:78                     
+CE:79:AE:88:50:38     -43               (not associated)                      
+54:01:95:03:D8:3D     -81               C8:3A:35:35:A0:C0                     
+10:F6:0A:B1:A2:1F     -27               0C:80:63:7D:26:C2                     
+DA:48:6A:06:1F:E5     -59               0C:80:63:7D:26:C2                     
+B4:AD:A3:D9:69:FA      -1               50:0F:F5:D4:53:78                     
+B2:AA:A6:D8:B2:54     -95               (not associated)                      
+66:7A:2E:5D:72:29     -95               C8:3A:35:42:F7:F8                     
+4A:A2:2D:93:23:81      -1               F4:2A:7D:54:1F:11                     
+                                                                          
+
+[97mScan Statistics:[0m
+• Total networks found: 33
+• WPA networks: 0
+• WPA2 networks: 11
+• Open networks: 2

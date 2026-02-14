@@ -1,0 +1,168 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+    background: white;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.container {
+    width: 100%;
+    max-width: 450px;
+}
+
+.login-box {
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.header {
+    padding: 48px 40px 36px;
+    text-align: center;
+}
+
+.logo {
+    margin-bottom: 16px;
+}
+
+h1 {
+    font-size: 24px;
+    font-weight: 400;
+    color: #202124;
+    margin-bottom: 8px;
+}
+
+.subtitle {
+    font-size: 16px;
+    color: #202124;
+    font-weight: 400;
+}
+
+.login-form {
+    padding: 0 40px 48px;
+}
+
+.form-group {
+    margin-bottom: 24px;
+}
+
+input {
+    width: 100%;
+    padding: 13px 15px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 16px;
+    color: #202124;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input:hover {
+    border-color: #80868b;
+}
+
+input:focus {
+    outline: none;
+    border-color: #1a73e8;
+    box-shadow: inset 0 -1px 0 #1a73e8;
+}
+
+input::placeholder {
+    color: #5f6368;
+}
+
+.options {
+    margin-bottom: 24px;
+}
+
+.forgot-link {
+    color: #1a73e8;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.forgot-link:hover {
+    text-decoration: underline;
+}
+
+.buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.primary-btn,
+.secondary-btn {
+    padding: 10px 24px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.primary-btn {
+    background: #1a73e8;
+    color: white;
+}
+
+.primary-btn:hover {
+    background: #1765cc;
+    box-shadow: 0 1px 2px 0 rgba(66, 133, 244, 0.3), 0 1px 3px 1px rgba(66, 133, 244, 0.15);
+}
+
+.secondary-btn {
+    background: white;
+    color: #1a73e8;
+    border: 1px solid #dadce0;
+}
+
+.secondary-btn:hover {
+    background: #f8f9fa;
+    border-color: #d2d3d4;
+}
+
+.terms {
+    text-align: center;
+}
+
+.terms p {
+    font-size: 12px;
+    color: #5f6368;
+    line-height: 1.5;
+}
+
+@media (max-width: 480px) {
+    .login-box {
+        border: none;
+    }
+
+    .header {
+        padding: 32px 24px 24px;
+    }
+
+    .login-form {
+        padding: 0 24px 32px;
+    }
+
+    .buttons {
+        flex-direction: column-reverse;
+        gap: 12px;
+    }
+
+    .primary-btn,
+    .secondary-btn {
+        width: 100%;
+    }
+}

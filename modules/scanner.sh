@@ -72,6 +72,10 @@ quick_scan() {
     echo -e "${YELLOW}[*] Press Ctrl+C to stop early${NC}"
     echo ""
 
+    # Kill any existing airodump-ng processes to prevent hanging
+    pkill -f airodump-ng 2>/dev/null
+    sleep 1
+
     local temp_file
     temp_file=$(mktemp /tmp/airodump.XXXXXX)
 
@@ -113,6 +117,10 @@ detailed_scan() {
     echo -e "${YELLOW}[*] Starting detailed scan for $duration seconds...${NC}"
     echo -e "${YELLOW}[*] This may take a while...${NC}"
     echo ""
+
+    # Kill any existing airodump-ng processes to prevent hanging
+    pkill -f airodump-ng 2>/dev/null
+    sleep 1
 
     local temp_file
     temp_file=$(mktemp /tmp/airodump.XXXXXX)
@@ -167,6 +175,10 @@ channel_scan() {
     esac
 
     echo -e "${YELLOW}[*] Scanning channels $start_chan to $end_chan...${NC}"
+
+    # Kill any existing airodump-ng processes to prevent hanging
+    pkill -f airodump-ng 2>/dev/null
+    sleep 1
 
     local temp_file
     temp_file=$(mktemp /tmp/airodump.XXXXXX)
@@ -231,11 +243,20 @@ wps_scan() {
     fi
 
     echo -e "${YELLOW}[*] Scanning for WPS-enabled networks...${NC}"
-    echo -e "${YELLOW}[*] This may take a few minutes...${NC}"
+    echo -e "${YELLOW}[*] Press Ctrl+C to stop scanning${NC}"
     echo ""
 
-    wash -i "$interface" -C 2>/dev/null
+    # Clean up any existing wash processes
+    pkill -f wash 2>/dev/null
+    sleep 1
 
+    # Run wash with visible output and timeout
+    timeout 60 wash -i "$interface" -C || {
+        echo ""
+        echo -e "${YELLOW}[!] Scan completed or interrupted${NC}"
+    }
+
+    echo ""
     pause
 }
 
@@ -260,6 +281,10 @@ five_ghz_scan() {
     fi
 
     echo -e "${YELLOW}[*] Scanning 5GHz bands (36-165)...${NC}"
+
+    # Kill any existing airodump-ng processes to prevent hanging
+    pkill -f airodump-ng 2>/dev/null
+    sleep 1
 
     local temp_file
     temp_file=$(mktemp /tmp/airodump.XXXXXX)

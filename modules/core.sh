@@ -262,7 +262,8 @@ check_vif_support() {
 # Check packet injection
 check_packet_injection() {
     local iface="$1"
-    if aireplay-ng --test "$iface" 2>&1 | grep -q "Injection is working"; then
+    # Add timeout to prevent hanging - 10 seconds should be enough
+    if timeout 10 aireplay-ng --test "$iface" 2>&1 | grep -q "Injection is working"; then
         return 0
     else
         return 1

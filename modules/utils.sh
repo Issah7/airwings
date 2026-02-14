@@ -8,71 +8,71 @@
 
 utils_system_info() {
     clear
-    echo -e "${BLUE}System Information{{NC}"
-    echo -e "${GRAY}==================={{NC}"
+    echo -e "${BLUE}System Information${NC}"
+    echo -e "${GRAY}===================${NC}"
     echo ""
     
-    echo -e "${WHITE}OS Information:{{NC}"
+    echo -e "${WHITE}OS Information:${NC}"
     uname -a
     echo ""
     
-    echo -e "${WHITE}Linux Version:{{NC}"
+    echo -e "${WHITE}Linux Version:${NC}"
     cat /etc/os-release 2>/dev/null | grep "PRETTY_NAME" | cut -d'=' -f2
     echo ""
     
-    echo -e "${WHITE}Kernel:{{NC}"
+    echo -e "${WHITE}Kernel:${NC}"
     uname -r
     echo ""
     
-    echo -e "${WHITE}Memory:{{NC}"
+    echo -e "${WHITE}Memory:${NC}"
     free -h | grep Mem
     echo ""
     
-    echo -e "${WHITE}CPU Cores:{{NC}"
+    echo -e "${WHITE}CPU Cores:${NC}"
     nproc
     echo ""
     
-    echo -e "${WHITE}Disk Space:{{NC}"
+    echo -e "${WHITE}Disk Space:${NC}"
     df -h / | tail -1
     echo ""
 }
 
 utils_network_status() {
     clear
-    echo -e "${BLUE}Network Status{{NC}"
-    echo -e "${GRAY}==============={{NC}"
+    echo -e "${BLUE}Network Status${NC}"
+    echo -e "${GRAY}===============${NC}"
     echo ""
     
-    echo -e "${WHITE}Network Interfaces:{{NC}"
+    echo -e "${WHITE}Network Interfaces:${NC}"
     ip addr show | grep -E "^\d+:|inet " | paste - -
     echo ""
     
-    echo -e "${WHITE}Routing Table:{{NC}"
+    echo -e "${WHITE}Routing Table:${NC}"
     ip route show | head -5
     echo ""
     
-    echo -e "${WHITE}DNS Servers:{{NC}"
+    echo -e "${WHITE}DNS Servers:${NC}"
     cat /etc/resolv.conf 2>/dev/null | grep -i "nameserver" || echo "[!] No DNS configured"
     echo ""
     
-    echo -e "${WHITE}Connected Hosts:{{NC}"
+    echo -e "${WHITE}Connected Hosts:${NC}"
     arp-scan -l 2>/dev/null | wc -l
 }
 
 utils_airmon_info() {
     clear
-    echo -e "${BLUE}Wireless Interface Info{{NC}"
-    echo -e "${GRAY}=======================.{{NC}"
+    echo -e "${BLUE}Wireless Interface Info${NC}"
+    echo -e "${GRAY}=======================.${NC}"
     echo ""
     
     if command -v airmon-ng &>/dev/null; then
         airmon-ng
     else
-        echo -e "${RED}[!] airmon-ng not found{{NC}}"
+        echo -e "${RED}[!] airmon-ng not found${NC}}"
     fi
     
     echo ""
-    echo -e "${WHITE}Wireless Interfaces (iw):{{NC}}"
+    echo -e "${WHITE}Wireless Interfaces (iw):${NC}}"
     iw dev 2>/dev/null || echo "[!] iw not available"
 }
 
@@ -82,8 +82,8 @@ utils_airmon_info() {
 
 utils_check_dependencies() {
     clear
-    echo -e "${BLUE}Dependency Check{{NC}"
-    echo -e "${GRAY}================={{NC}"
+    echo -e "${BLUE}Dependency Check${NC}"
+    echo -e "${GRAY}=================${NC}"
     echo ""
     
     local deps=(
@@ -120,7 +120,7 @@ utils_check_dependencies() {
             echo "  sudo apt install $tool"
         done
     else
-        echo -e "${GREEN}All dependencies installed!{{NC}}"
+        echo -e "${GREEN}All dependencies installed!${NC}}"
     fi
     
     pause
@@ -132,8 +132,8 @@ utils_check_dependencies() {
 
 utils_generate_report() {
     clear
-    echo -e "${BLUE}Generate Report{{NC}"
-    echo -e "${GRAY}================={{NC}"
+    echo -e "${BLUE}Generate Report${NC}"
+    echo -e "${GRAY}=================${NC}"
     
     local report_file="$LOGS_DIR/report_$(date +%Y%m%d_%H%M%S).txt"
     mkdir -p "$LOGS_DIR"
@@ -158,7 +158,7 @@ utils_generate_report() {
         echo ""
     } > "$report_file"
     
-    echo -e "${GREEN}[✓] Report saved: $report_file{{NC}}"
+    echo -e "${GREEN}[✓] Report saved: $report_file${NC}}"
     pause
 }
 
@@ -169,17 +169,17 @@ utils_generate_report() {
 utils_menu() {
     while true; do
         clear
-        echo -e "${BLUE}┌─────────────────────────────────────────────────────────────────┐{{NC}"
-        echo -e "${BLUE}│${WHITE}                      UTILITIES                            ${BLUE}│{{NC}"
-        echo -e "${BLUE}├─────────────────────────────────────────────────────────────────┤{{NC}"
-        echo -e "${BLUE}│ ${CYAN}[1]${WHITE} System Information       {{GRAY}OS and hardware info{{BLUE}│{{NC}"
-        echo -e "${BLUE}│ ${CYAN}[2]${WHITE} Network Status          {{GRAY}Network configuration{{BLUE}│{{NC}"
-        echo -e "${BLUE}│ {{CYAN}[3]{{WHITE} Wireless Info           {{GRAY}Adapter information{{BLUE}│{{NC}"
-        echo -e "${BLUE}│ {{CYAN}[4]{{WHITE} Check Dependencies      {{GRAY}Verify tool installation{{BLUE}│{{NC}"
-        echo -e "${BLUE}│ {{CYAN}[5]{{WHITE} Generate Report         {{GRAY}Create session report{{BLUE}│{{NC}"
-        echo -e "${BLUE}│ {{CYAN}[6]{{WHITE} View Logs               {{GRAY}Browse activity logs{{BLUE}│{{NC}"
-        echo -e "${BLUE}│ {{CYAN}[0]{{WHITE} Back to Main Menu         {{GRAY}Return{{BLUE}│{{NC}"
-        echo -e "${BLUE}└─────────────────────────────────────────────────────────────────┘{{NC}"
+        echo -e "${BLUE}┌─────────────────────────────────────────────────────────────────┐${NC}"
+        echo -e "${BLUE}│${WHITE}                      UTILITIES                           ${BLUE}│${NC}"
+        echo -e "${BLUE}├─────────────────────────────────────────────────────────────────┤${NC}"
+        echo -e "${BLUE}│ ${CYAN}[1]${WHITE} System Information       ${GRAY}OS and hardware info${BLUE}      │${NC}"
+        echo -e "${BLUE}│ ${CYAN}[2]${WHITE} Network Status           ${GRAY}Network configuration${BLUE}     │${NC}"
+        echo -e "${BLUE}│ ${CYAN}[3]${WHITE} Wireless Info            ${GRAY}Adapter information${BLUE}       │${NC}"
+        echo -e "${BLUE}│ ${CYAN}[4]${WHITE} Check Dependencies       ${GRAY}Verify tool installation${BLUE} │${NC}"
+        echo -e "${BLUE}│ ${CYAN}[5]${WHITE} Generate Report          ${GRAY}Create session report${BLUE}     │${NC}"
+        echo -e "${BLUE}│ ${CYAN}[6]${WHITE} View Logs                ${GRAY}Browse activity logs${BLUE}      │${NC}"
+        echo -e "${BLUE}│ ${CYAN}[0]${WHITE} Back to Main Menu        ${GRAY}Return${BLUE}                    │${NC}"
+        echo -e "${BLUE}└─────────────────────────────────────────────────────────────────┘${NC}"
         echo ""
         
         read -p "Select an option: " choice
@@ -192,14 +192,14 @@ utils_menu() {
             5) utils_generate_report ;;
             6) 
                 clear
-                echo -e "${BLUE}Log Files{{NC}"
-                echo -e "${GRAY}==========={{NC}"
+                echo -e "${BLUE}Log Files${NC}"
+                echo -e "${GRAY}===========${NC}"
                 ls -lh "$LOGS_DIR" 2>/dev/null || echo "[!] No logs found"
                 pause
                 ;;
             0) break ;;
             *)
-                echo -e "${RED}[!] Invalid option{{NC}"
+                echo -e "${RED}[!] Invalid option${NC}"
                 sleep 2
                 ;;
         esac
