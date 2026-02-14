@@ -177,7 +177,13 @@ enable_monitor_mode() {
     echo -e "${BLUE}Enable Monitor Mode${NC}"
     echo -e "${GRAY}===================${NC}"
     
-    local interface="${SELECTED_INTERFACE:-wlan0}"
+    local interface="$(get_selected_or_first_interface)"
+
+    if [[ -z "$interface" ]]; then
+        error "No wireless interfaces found"
+        pause
+        return
+    fi
     
     if [[ ! -e "/sys/class/net/$interface" ]]; then
         error "Interface $interface not found"
@@ -251,7 +257,13 @@ disable_monitor_mode() {
     echo -e "${BLUE}Disable Monitor Mode${NC}"
     echo -e "${GRAY}====================${NC}"
     
-    local monitor_interface="${MONITOR_INTERFACE:-wlan0mon}"
+    local monitor_interface=$(get_monitor_interface)
+
+    if [[ -z "$monitor_interface" ]]; then
+        error "No monitor mode interface found. Please enable monitor mode first."
+        pause
+        return
+    fi
     
     if ! is_monitor_mode "$monitor_interface"; then
         echo -e "${YELLOW}Interface $monitor_interface is not in monitor mode${NC}"
@@ -280,7 +292,13 @@ interface_info() {
     echo -e "${BLUE}Interface Information${NC}"
     echo -e "${GRAY}===================${NC}"
     
-    local interface="${SELECTED_INTERFACE:-wlan0}"
+    local interface="$(get_selected_or_first_interface)"
+
+    if [[ -z "$interface" ]]; then
+        error "No wireless interfaces found"
+        pause
+        return
+    fi
     
     if [[ ! -e "/sys/class/net/$interface" ]]; then
         echo -e "${RED}Interface $interface not found${NC}"
@@ -333,7 +351,13 @@ change_mac_address() {
     echo -e "${BLUE}Change MAC Address${NC}"
     echo -e "${GRAY}=================${NC}"
     
-    local interface="${SELECTED_INTERFACE:-wlan0}"
+    local interface="$(get_selected_or_first_interface)"
+
+    if [[ -z "$interface" ]]; then
+        error "No wireless interfaces found"
+        pause
+        return
+    fi
     
     if [[ ! -e "/sys/class/net/$interface" ]]; then
         error "Interface $interface not found"
@@ -401,7 +425,13 @@ test_interface() {
     echo -e "${BLUE}Interface Testing${NC}"
     echo -e "${GRAY}=================${NC}"
     
-    local interface="${SELECTED_INTERFACE:-wlan0}"
+    local interface="$(get_selected_or_first_interface)"
+
+    if [[ -z "$interface" ]]; then
+        error "No wireless interfaces found"
+        pause
+        return
+    fi
     
     if [[ ! -e "/sys/class/net/$interface" ]]; then
         error "Interface $interface not found"

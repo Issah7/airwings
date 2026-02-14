@@ -46,7 +46,13 @@ quick_scan() {
     echo -e "${BLUE}Quick Network Scan${NC}"
     echo -e "${GRAY}=================${NC}"
 
-    local interface="${MONITOR_INTERFACE:-wlan0mon}"
+    local interface=$(get_monitor_interface)
+
+    if [[ -z "$interface" ]]; then
+        error "No monitor mode interface found. Please enable monitor mode first."
+        pause
+        return
+    fi
 
     if [[ ! -e "/sys/class/net/$interface" ]]; then
         echo -e "${RED}[!] Interface $interface not found${NC}"
@@ -87,7 +93,13 @@ detailed_scan() {
     echo -e "${BLUE}Detailed Network Scan${NC}"
     echo -e "${GRAY}=====================${NC}"
 
-    local interface="${MONITOR_INTERFACE:-wlan0mon}"
+    local interface=$(get_monitor_interface)
+
+    if [[ -z "$interface" ]]; then
+        error "No monitor mode interface found. Please enable monitor mode first."
+        pause
+        return
+    fi
 
     if ! is_monitor_mode "$interface"; then
         echo -e "${RED}[!] Interface $interface is not in monitor mode${NC}"
@@ -123,7 +135,13 @@ channel_scan() {
     echo -e "${BLUE}Channel Scan${NC}"
     echo -e "${GRAY}=============${NC}"
 
-    local interface="${MONITOR_INTERFACE:-wlan0mon}"
+    local interface=$(get_monitor_interface)
+
+    if [[ -z "$interface" ]]; then
+        error "No monitor mode interface found. Please enable monitor mode first."
+        pause
+        return
+    fi
 
     if ! is_monitor_mode "$interface"; then
         echo -e "${RED}[!] Interface $interface is not in monitor mode${NC}"
@@ -198,7 +216,13 @@ wps_scan() {
         return
     fi
 
-    local interface="${MONITOR_INTERFACE:-wlan0mon}"
+    local interface=$(get_monitor_interface)
+
+    if [[ -z "$interface" ]]; then
+        error "No monitor mode interface found. Please enable monitor mode first."
+        pause
+        return
+    fi
 
     if ! is_monitor_mode "$interface"; then
         echo -e "${RED}[!] Interface $interface is not in monitor mode${NC}"
@@ -221,7 +245,13 @@ five_ghz_scan() {
     echo -e "${BLUE}5GHz Network Scan${NC}"
     echo -e "${GRAY}==================${NC}"
 
-    local interface="${MONITOR_INTERFACE:-wlan0mon}"
+    local interface=$(get_monitor_interface)
+
+    if [[ -z "$interface" ]]; then
+        error "No monitor mode interface found. Please enable monitor mode first."
+        pause
+        return
+    fi
 
     if ! is_monitor_mode "$interface"; then
         echo -e "${RED}[!] Interface $interface is not in monitor mode${NC}"
@@ -253,7 +283,13 @@ client_monitoring() {
     echo -e "${BLUE}Client Monitoring${NC}"
     echo -e "${GRAY}=================${NC}"
 
-    local interface="${MONITOR_INTERFACE:-wlan0mon}"
+    local interface=$(get_monitor_interface)
+
+    if [[ -z "$interface" ]]; then
+        error "No monitor mode interface found. Please enable monitor mode first."
+        pause
+        return
+    fi
 
     if ! is_monitor_mode "$interface"; then
         echo -e "${RED}[!] Interface $interface is not in monitor mode${NC}"
@@ -313,7 +349,13 @@ live_airodump() {
     echo -e "${BLUE}Live Airodump (new terminal)${NC}"
     echo -e "${GRAY}==============================${NC}"
 
-    local interface="${MONITOR_INTERFACE:-wlan0mon}"
+    local interface=$(get_monitor_interface)
+
+    if [[ -z "$interface" ]]; then
+        error "No monitor mode interface found. Please enable monitor mode first."
+        pause
+        return
+    fi
     read -p "Interface [${interface}]: " iface_in
     interface=${iface_in:-$interface}
 

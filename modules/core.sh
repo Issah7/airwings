@@ -70,15 +70,20 @@ cleanup_processes() {
 # Restore interfaces
 restore_interfaces() {
     info "Restoring network interfaces..."
-    
-    # Stop monitor mode
-    airmon-ng stop wlan0mon 2>/dev/null
-    airmon-ng stop wlan1mon 2>/dev/null
-    
+
+    # Stop all monitor mode interfaces
+    local mon_interfaces=$(get_monitor_interfaces)
+    if [[ -n "$mon_interfaces" ]]; then
+        for mon_iface in $mon_interfaces; do
+            info "Stopping monitor mode on $mon_iface..."
+            airmon-ng stop "$mon_iface" 2>/dev/null
+        done
+    fi
+
     # Restart network manager
     systemctl start NetworkManager 2>/dev/null
     systemctl start wpa_supplicant 2>/dev/null
-    
+
     success "Interfaces restored"
 }
 
@@ -102,6 +107,54 @@ is_monitor_mode() {
 # Get current interfaces
 get_wireless_interfaces() {
     iwconfig 2>/dev/null | grep -E "^[a-zA-Z0-9]+" | awk '{print $1}'
+}
+
+# Get first available wireless interface (helper for dynamic selection)
+get_first_wireless_interface() {
+    local first=$(get_wireless_interfaces | head -1)
+    echo "${first:-}"
+}
+
+# Get selected or first available interface
+get_selected_or_first_interface() {
+    if [[ -n "$SELECTED_INTERFACE" ]] && check_interface "$SELECTED_INTERFACE"; then
+        echo "$SELECTED_INTERFACE"
+    elif [[ -n "$DEFAULT_INTERFACE" ]] && check_interface "$DEFAULT_INTERFACE"; then
+        echo "$DEFAULT_INTERFACE"
+    else
+        get_first_wireless_interface
+    fi
+}
+
+# Get active monitor interface (for scanning and attacks)
+get_monitor_interface() {
+    # First check if MONITOR_INTERFACE is set and valid
+    if [[ -n "$MONITOR_INTERFACE" ]] && is_monitor_mode "$MONITOR_INTERFACE"; then
+        echo "$MONITOR_INTERFACE"
+        return 0
+    fi
+
+    # Try to find any active monitor interface
+    local mon_iface=$(get_monitor_interfaces | head -1)
+    if [[ -n "$mon_iface" ]]; then
+        echo "$mon_iface"
+        return 0
+    fi
+
+    # Check for common naming patterns (wlan0mon, wlan1mon, etc.)
+    local base=$(get_selected_or_first_interface)
+    if [[ -n "$base" ]]; then
+        if is_monitor_mode "${base}mon"; then
+            echo "${base}mon"
+            return 0
+        elif is_monitor_mode "$base"; then
+            echo "$base"
+            return 0
+        fi
+    fi
+
+    # No monitor interface found
+    return 1
 }
 
 # Get monitor interfaces
