@@ -6,25 +6,51 @@
 captive_portal_menu() {
     while true; do
         clear
+
+        # Check if Evil Twin is running in background
+        local et_running=false
+        local et_ssid=""
+        if [[ -f "/tmp/airwings_eviltwin_state" ]]; then
+            source /tmp/airwings_eviltwin_state
+            if [[ "$ET_RUNNING" == "true" ]] && kill -0 "$ET_AP_PID" 2>/dev/null; then
+                et_running=true
+                et_ssid="$ET_ESSID"
+            else
+                rm -f /tmp/airwings_eviltwin_state
+            fi
+        fi
+
         echo -e "${BLUE}┌─────────────────────────────────────────────────────────────────┐${NC}"
-        echo -e "${BLUE}│${WHITE}              CAPTIVE PORTAL ATTACKS                    ${BLUE}│${NC}"
+        echo -e "${BLUE}│${WHITE}              CAPTIVE PORTAL ATTACKS                            ${BLUE}│${NC}"
         echo -e "${BLUE}├─────────────────────────────────────────────────────────────────┤${NC}"
-        echo -e "${BLUE}│ ${CYAN}[1]${WHITE} Quick Evil Twin          ${GRAY}Fast setup with templates${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[2]${WHITE} Custom Captive Portal    ${GRAY}Create custom pages${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[3]${WHITE} Portal Templates         ${GRAY}Browse template gallery${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[4]${WHITE} Targeted Attack         ${GRAY}Specific venue pages${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[5]${WHITE} HTTPS Captive Portal     ${GRAY}SSL-enabled portal${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[6]${WHITE} Credential Harvesting    ${GRAY}Advanced harvesting${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[7]${WHITE} Page Redirects         ${GRAY}Redirect to sites${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[8]${WHITE} Analytics & Tracking     ${GRAY}Monitor victims${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[9]${WHITE} Portal Manager          ${GRAY}Manage active portals${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[0]${WHITE} Back to Main Menu         ${GRAY}Return${BLUE}│${NC}"
+        if [[ "$et_running" == true ]]; then
+        echo -e "${BLUE}│ ${GREEN}[R]${WHITE} Resume Evil Twin         ${GREEN}◉ $et_ssid (LIVE)${BLUE}│${NC}"
+        echo -e "${BLUE}├─────────────────────────────────────────────────────────────────┤${NC}"
+        fi
+        echo -e "${BLUE}│ ${CYAN}[1]${WHITE} Quick Evil Twin          ${GRAY}Fast setup with templates       ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[2]${WHITE} Custom Captive Portal    ${GRAY}Create custom pages             ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[3]${WHITE} Portal Templates         ${GRAY}Browse template gallery         ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[4]${WHITE} Targeted Attack          ${GRAY}Specific venue pages            ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[5]${WHITE} HTTPS Captive Portal     ${GRAY}SSL-enabled portal              ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[6]${WHITE} Credential Harvesting    ${GRAY}Advanced harvesting             ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[7]${WHITE} Page Redirects           ${GRAY}Redirect to sites               ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[8]${WHITE} Analytics & Tracking     ${GRAY}Monitor victims                 ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[9]${WHITE} Portal Manager           ${GRAY}Manage active portals           ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[0]${WHITE} Back to Main Menu        ${GRAY}Return                          ${BLUE}│${NC}"
         echo -e "${BLUE}└─────────────────────────────────────────────────────────────────┘${NC}"
         echo ""
-        
+
         read -p "Select an option: " choice
-        
+
         case $choice in
+            r|R)
+                if [[ "$et_running" == true ]]; then
+                    resume_evil_twin
+                else
+                    echo -e "${YELLOW}[!] No Evil Twin running in background${NC}"
+                    sleep 2
+                fi
+                ;;
             1) quick_evil_twin ;;
             2) custom_captive_portal ;;
             3) portal_templates ;;
@@ -35,7 +61,7 @@ captive_portal_menu() {
             8) analytics_tracking ;;
             9) portal_manager ;;
             0) break ;;
-            *) 
+            *)
                 echo -e "${RED}[!] Invalid option${NC}"
                 sleep 2
                 ;;

