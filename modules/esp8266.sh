@@ -1,857 +1,966 @@
 #!/bin/bash
 
-# ESP8266 Deauther module
+# ESP8266 Deauther module - Serial Command Integration
+# Supports Spacehuhn ESP8266 Deauther firmware (v2.x)
+# Serial commands: scan, show, select, deauth, beacon, probe, stop, sysinfo, etc.
 
-# ESP8266 menu
+# Default serial settings
+ESP8266_PORT="${ESP8266_PORT:-/dev/ttyUSB0}"
+ESP8266_BAUD="${ESP8266_BAUD:-115200}"
+ESP_SSID_FILE="${AIRWINGS_DIR:-$(dirname "$0")/..}/data/esp_ssids.txt"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Serial Communication Engine
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Auto-detect ESP8266 serial port
+esp_detect_port() {
+    local detected=""
+
+    for port in /dev/ttyUSB* /dev/ttyACM*; do
+        [[ -e "$port" ]] || continue
+
+        # Configure port and try to get a response
+        stty -F "$port" "$ESP8266_BAUD" cs8 -cstopb -parenb raw -echo 2>/dev/null || continue
+
+        # Send empty line to wake up, then sysinfo
+        printf "\r\n" > "$port" 2>/dev/null
+        sleep 0.5
+        printf "sysinfo\r\n" > "$port" 2>/dev/null
+
+        local response
+        response=$(timeout 3 cat "$port" 2>/dev/null)
+
+        if echo "$response" | grep -qi "deauther\|spacehuhn\|ESP8266\|sdk\|channel"; then
+            detected="$port"
+            break
+        fi
+    done
+
+    echo "$detected"
+}
+
+# Select or detect ESP8266 port interactively
+esp_select_port() {
+    local devices=()
+
+    for port in /dev/ttyUSB* /dev/ttyACM*; do
+        [[ -e "$port" ]] && devices+=("$port")
+    done
+
+    if [[ ${#devices[@]} -eq 0 ]]; then
+        echo -e "${RED}[!] No serial devices found${NC}"
+        echo ""
+        echo -e "${WHITE}Troubleshooting:${NC}"
+        echo "  - Check USB connection"
+        echo "  - Install drivers: CH340/CP2102"
+        echo "  - Try different USB port"
+        echo "  - Check permissions: sudo usermod -aG dialout \$USER"
+        return 1
+    fi
+
+    echo -e "${WHITE}Available serial devices:${NC}"
+    for i in "${!devices[@]}"; do
+        local port="${devices[$i]}"
+        local info=""
+
+        # Try to identify device
+        local usb_info=$(udevadm info --name="$port" 2>/dev/null | grep "ID_MODEL=" | cut -d= -f2)
+        [[ -n "$usb_info" ]] && info=" ($usb_info)"
+
+        echo -e "  ${CYAN}[$((i+1))]${NC} ${port}${info}"
+    done
+    echo ""
+
+    if [[ ${#devices[@]} -eq 1 ]]; then
+        ESP8266_PORT="${devices[0]}"
+        echo -e "${GREEN}[✓] Auto-selected: $ESP8266_PORT${NC}"
+    else
+        read -p "Select device (1-${#devices[@]}): " choice
+        if [[ "$choice" -ge 1 && "$choice" -le ${#devices[@]} ]] 2>/dev/null; then
+            ESP8266_PORT="${devices[$((choice-1))]}"
+            echo -e "${GREEN}[✓] Selected: $ESP8266_PORT${NC}"
+        else
+            echo -e "${RED}[!] Invalid selection${NC}"
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+# Send command to ESP8266 and capture response
+esp_send_command() {
+    local cmd="$1"
+    local wait_time="${2:-3}"
+    local port="${3:-$ESP8266_PORT}"
+
+    if [[ ! -e "$port" ]]; then
+        echo -e "${RED}[!] Device not connected: $port${NC}"
+        return 1
+    fi
+
+    # Configure serial port
+    stty -F "$port" "$ESP8266_BAUD" cs8 -cstopb -parenb raw -echo 2>/dev/null || {
+        echo -e "${RED}[!] Failed to configure serial port${NC}"
+        return 1
+    }
+
+    # Send command
+    printf "${cmd}\r\n" > "$port" 2>/dev/null
+
+    # Read response
+    timeout "$wait_time" cat "$port" 2>/dev/null
+}
+
+# Send command and display output in real-time
+esp_send_command_live() {
+    local cmd="$1"
+    local wait_time="${2:-5}"
+    local port="${3:-$ESP8266_PORT}"
+
+    if [[ ! -e "$port" ]]; then
+        echo -e "${RED}[!] Device not connected: $port${NC}"
+        return 1
+    fi
+
+    stty -F "$port" "$ESP8266_BAUD" cs8 -cstopb -parenb raw -echo 2>/dev/null || return 1
+
+    printf "${cmd}\r\n" > "$port" 2>/dev/null
+
+    # Stream output until timeout
+    timeout "$wait_time" cat "$port" 2>/dev/null | while IFS= read -r line; do
+        # Clean up the line (remove carriage returns)
+        line=$(echo "$line" | tr -d '\r')
+        [[ -z "$line" ]] && continue
+        echo -e "${WHITE}  $line${NC}"
+    done
+}
+
+# Check if ESP8266 is connected and responding
+esp_check_connection() {
+    local port="${1:-$ESP8266_PORT}"
+
+    if [[ ! -e "$port" ]]; then
+        return 1
+    fi
+
+    stty -F "$port" "$ESP8266_BAUD" cs8 -cstopb -parenb raw -echo 2>/dev/null || return 1
+
+    # Flush input
+    timeout 0.5 cat "$port" >/dev/null 2>&1
+
+    printf "sysinfo\r\n" > "$port" 2>/dev/null
+
+    local response
+    response=$(timeout 3 cat "$port" 2>/dev/null)
+
+    if echo "$response" | grep -qi "deauther\|spacehuhn\|ESP8266\|sdk\|channel\|mac"; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Verify connection before running attacks (used by all attack functions)
+esp_require_connection() {
+    if ! esp_check_connection "$ESP8266_PORT"; then
+        echo -e "${RED}[!] ESP8266 not responding on $ESP8266_PORT${NC}"
+        echo ""
+        echo -e "${YELLOW}[*] Attempting auto-detection...${NC}"
+
+        local detected=$(esp_detect_port)
+        if [[ -n "$detected" ]]; then
+            ESP8266_PORT="$detected"
+            echo -e "${GREEN}[✓] Found ESP8266 on $ESP8266_PORT${NC}"
+            return 0
+        fi
+
+        echo -e "${RED}[!] ESP8266 not found. Please check:${NC}"
+        echo "  - USB connection"
+        echo "  - Device is powered on"
+        echo "  - Deauther firmware is flashed"
+        return 1
+    fi
+    return 0
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ESP8266 Menu
+# ══════════════════════════════════════════════════════════════════════════════
+
 esp8266_menu() {
     while true; do
         clear
         echo -e "${BLUE}┌─────────────────────────────────────────────────────────────────┐${NC}"
-        echo -e "${BLUE}│${WHITE}                 ESP8266 DEAUTHER                       ${BLUE}│${NC}"
+        echo -e "${BLUE}│${WHITE}                 ESP8266 DEAUTHER                               ${BLUE}│${NC}"
         echo -e "${BLUE}├─────────────────────────────────────────────────────────────────┤${NC}"
-        echo -e "${BLUE}│ ${CYAN}[1]${WHITE} Flash Firmware            ${GRAY}Program ESP8266 device${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[2]${WHITE} Serial Monitor            ${GRAY}Huhnitor terminal${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[3]${WHITE} Web Interface            ${GRAY}Access via browser${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[4]${WHITE} Deauth Attack            ${GRAY}Disconnect devices${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[5]${WHITE} Beacon Flood             ${GRAY}Create fake APs${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[6]${WHITE} Probe Request Attack    ${GRAY}Device discovery${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[7]${WHITE} Packet Monitor            ${GRAY}Analyze traffic${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[8]${WHITE} SSID Manager             ${GRAY}Manage SSID lists${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[9]${WHITE} Device Configuration      ${GRAY}Settings and options${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[10]${WHITE} Scripts & Automation     ${GRAY}Run attack scripts${BLUE}│${NC}"
-        echo -e "${BLUE}│ ${CYAN}[0]${WHITE} Back to Main Menu         ${GRAY}Return${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[1]${WHITE}  Flash Firmware           ${GRAY}Program ESP8266 device         ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[2]${WHITE}  Serial Terminal          ${GRAY}Interactive serial console      ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[3]${WHITE}  Web Interface            ${GRAY}Access via browser              ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[4]${WHITE}  Scan Networks            ${GRAY}Scan APs and clients            ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[5]${WHITE}  Deauth Attack            ${GRAY}Disconnect devices              ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[6]${WHITE}  Beacon Flood             ${GRAY}Create fake APs                 ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[7]${WHITE}  Probe Request Attack     ${GRAY}Confuse nearby devices          ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[8]${WHITE}  SSID Manager             ${GRAY}Manage SSID lists               ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[9]${WHITE}  Device Info              ${GRAY}System info & status            ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[10]${WHITE} Select Port              ${GRAY}Change serial device            ${BLUE}│${NC}"
+        echo -e "${BLUE}│ ${CYAN}[0]${WHITE}  Back to Main Menu        ${GRAY}Return                          ${BLUE}│${NC}"
         echo -e "${BLUE}└─────────────────────────────────────────────────────────────────┘${NC}"
+
+        # Show connection status
+        if [[ -e "$ESP8266_PORT" ]]; then
+            echo -e "  ${GRAY}Port: $ESP8266_PORT @ ${ESP8266_BAUD}bps${NC}"
+        else
+            echo -e "  ${RED}No device connected${NC}"
+        fi
         echo ""
-        
+
         read -p "Select an option: " choice
-        
+
         case $choice in
             1) esp_flash_firmware ;;
-            2) esp_serial_monitor ;;
+            2) esp_serial_terminal ;;
             3) esp_web_interface ;;
-            4) esp_deauth_attack ;;
-            5) esp_beacon_flood ;;
-            6) esp_probe_attack ;;
-            7) esp_packet_monitor ;;
+            4) esp_scan_networks ;;
+            5) esp_deauth_attack ;;
+            6) esp_beacon_flood ;;
+            7) esp_probe_attack ;;
             8) esp_ssid_manager ;;
-            9) esp_device_config ;;
-            10) esp_scripts_automation ;;
+            9) esp_device_info ;;
+            10) esp_select_port ;;
             0) break ;;
-            *) 
+            *)
                 echo -e "${RED}[!] Invalid option${NC}"
-                sleep 2
+                sleep 1
                 ;;
         esac
     done
 }
 
-# Default serial settings
-ESP8266_PORT="${ESP8266_PORT:-/dev/ttyUSB0}"
-ESP8266_BAUD="${ESP8266_BAUD:-115200}"
+# ══════════════════════════════════════════════════════════════════════════════
+# 1. Flash Firmware
+# ══════════════════════════════════════════════════════════════════════════════
 
-# Flash ESP8266 firmware
 esp_flash_firmware() {
     clear
     echo -e "${BLUE}Flash ESP8266 Firmware${NC}"
     echo -e "${GRAY}=========================${NC}"
-    
-    if ! command -v esptool &> /dev/null; then
+
+    if ! command -v esptool.py &>/dev/null && ! command -v esptool &>/dev/null; then
         echo -e "${RED}[!] esptool not found${NC}"
-        echo -e "${YELLOW}[!] Install with: pip3 install esptool${NC}"
+        echo -e "${YELLOW}[*] Install with: pip3 install esptool${NC}"
         pause
         return
     fi
-    
-    # Find ESP8266 devices
-    echo -e "${YELLOW}[*] Detecting ESP8266 devices...${NC}"
-    
-    local devices=()
-    local device_ports=()
-    
-    # Common serial ports
-    for port in /dev/ttyUSB* /dev/ttyACM*; do
-        if [[ -e "$port" ]]; then
-            devices+=("$port")
-            device_ports+=("$(basename "$port")")
-        fi
-    done
-    
-    if [[ ${#devices[@]} -eq 0 ]]; then
-        echo -e "${RED}[!] No ESP8266 devices found${NC}"
-        echo ""
-        echo -e "${WHITE}Troubleshooting:${NC}"
-        echo "- Check USB connections"
-        echo "- Install drivers (CH340, CP2102, etc.)"
-        echo "- Try different USB port"
-        echo "- Check device permissions"
-        pause
-        return
-    fi
-    
+
+    local esptool_cmd="esptool.py"
+    command -v esptool.py &>/dev/null || esptool_cmd="esptool"
+
+    # Find serial devices
+    esp_select_port || { pause; return; }
     echo ""
-    echo -e "${WHITE}Found devices:${NC}"
-    for i in "${!devices[@]}"; do
-        echo -e "${CYAN}[$((i+1))]${NC} ${devices[$i]}"
-    done
-    echo ""
-    
-    read -p "Select device (1-${#devices[@]}): " device_choice
-    
-    if [[ $device_choice -ge 1 && $device_choice -le ${#devices[@]} ]]; then
-        local selected_port="${devices[$((device_choice-1))]}"
-        echo -e "${YELLOW}[*] Selected: $selected_port${NC}"
-    else
-        echo -e "${RED}[!] Invalid selection${NC}"
-        sleep 2
-        return
-    fi
-    
+
     # Firmware selection
-    echo ""
     echo -e "${WHITE}Firmware Options:${NC}"
-    echo -e "${CYAN}[1]${NC} Download latest release (recommended)"
-    echo -e "${CYAN}[2]${NC} Use local firmware file"
-    echo -e "${CYAN}[3]${NC} Development version"
+    echo -e "${CYAN}[1]${NC} Download latest Deauther release (recommended)"
+    echo -e "${CYAN}[2]${NC} Use local firmware file (.bin)"
     echo ""
-    
-    read -p "Select option: " firmware_choice
-    
+
+    read -p "Select option: " fw_choice
+
     local firmware_file=""
-    
-    case $firmware_choice in
+
+    case $fw_choice in
         1)
-            echo -e "${YELLOW}[*] Downloading latest firmware...${NC}"
-            local latest_url="https://github.com/SpacehuhnTech/esp8266_deauther/releases/latest/download/esp8266_deauther_2.6.1_NODEMCU.bin"
-            firmware_file="/tmp/esp8266_latest.bin"
-            
-            if wget -O "$firmware_file" "$latest_url" 2>/dev/null; then
-                success "Firmware downloaded"
+            echo -e "${YELLOW}[*] Downloading latest Deauther firmware...${NC}"
+
+            # Board selection
+            echo ""
+            echo -e "${WHITE}Select your board:${NC}"
+            echo -e "${CYAN}[1]${NC} NodeMCU (most common)"
+            echo -e "${CYAN}[2]${NC} D1 Mini / Wemos"
+            echo -e "${CYAN}[3]${NC} ESP-12 Generic"
+            echo ""
+            read -p "Board type [1]: " board_choice
+            board_choice="${board_choice:-1}"
+
+            local board_name="NODEMCU"
+            case $board_choice in
+                2) board_name="D1_MINI" ;;
+                3) board_name="ESP12" ;;
+            esac
+
+            local dl_url="https://github.com/SpacehuhnTech/esp8266_deauther/releases/latest/download/esp8266_deauther_2.6.1_${board_name}.bin"
+            firmware_file="/tmp/esp8266_deauther.bin"
+
+            if wget -q --show-progress -O "$firmware_file" "$dl_url" 2>/dev/null || curl -L -o "$firmware_file" "$dl_url" 2>/dev/null; then
+                echo -e "${GREEN}[✓] Firmware downloaded${NC}"
             else
-                error "Failed to download firmware"
+                echo -e "${RED}[!] Download failed. Check internet connection.${NC}"
+                pause
+                return
             fi
             ;;
         2)
-            read -p "Enter path to firmware file: " custom_firmware
-            if [[ -f "$custom_firmware" ]]; then
-                firmware_file="$custom_firmware"
+            read -p "Enter path to firmware .bin file: " custom_fw
+            if [[ -f "$custom_fw" ]]; then
+                firmware_file="$custom_fw"
             else
-                error "Firmware file not found"
-            fi
-            ;;
-        3)
-            echo -e "${YELLOW}[*] Cloning development repository...${NC}"
-            local dev_dir="/tmp/esp8266_dev"
-            if git clone https://github.com/SpacehuhnTech/esp8266_deauther.git "$dev_dir" 2>/dev/null; then
-                echo -e "${YELLOW}[*] Building firmware...${NC}"
-                cd "$dev_dir"
-                # This would require Arduino CLI or similar
-                echo -e "${RED}[!] Development build requires Arduino IDE${NC}"
-                cd - > /dev/null
-                error "Development build not implemented yet"
-            else
-                error "Failed to clone repository"
+                echo -e "${RED}[!] File not found: $custom_fw${NC}"
+                pause
+                return
             fi
             ;;
         *)
             echo -e "${RED}[!] Invalid option${NC}"
-            sleep 2
+            sleep 1
             return
             ;;
     esac
-    
-    if [[ -z "$firmware_file" || ! -f "$firmware_file" ]]; then
-        error "Firmware file not available"
-    fi
-    
-    # Flash firmware
-    echo ""
-    echo -e "${YELLOW}[*] Preparing to flash firmware...${NC}"
-    echo -e "${YELLOW}[*] Ensure ESP8266 is in flash mode${NC}"
-    echo -e "${YELLOW}[*] Hold FLASH button, press RESET, release FLASH${NC}"
-    echo ""
-    
-    read -p "Ready to flash? (y/N): " confirm
-    
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}[*] Erasing flash...${NC}"
-        esptool.py --port "$selected_port" erase_flash
-        
-        echo -e "${YELLOW}[*] Flashing firmware...${NC}"
-        esptool.py --port "$selected_port" write_flash 0x0 "$firmware_file"
-        
-        if [[ $? -eq 0 ]]; then
-            success "Firmware flashed successfully!"
-            echo -e "${YELLOW}[*] Resetting device...${NC}"
-            
-            # Wait for device to reset
-            sleep 3
-            
-            # Check if device is responding
-            if check_esp8266_response "$selected_port"; then
-                success "ESP8266 is responding!"
-            else
-                warning "ESP8266 may need manual reset"
-            fi
-        else
-            error "Firmware flash failed"
-        fi
-    fi
-    
-    # Cleanup
-    [[ -f "$firmware_file" ]] && rm -f "$firmware_file"
-}
 
-# Serial monitor (Huhnitor)
-esp_serial_monitor() {
-    clear
-    echo -e "${BLUE}Serial Monitor (Huhnitor)${NC}"
-    echo -e "${GRAY}==========================${NC}"
-    
-    if ! command -v huhnitor &> /dev/null; then
-        echo -e "${RED}[!] huhnitor not found${NC}"
-        echo -e "${YELLOW}[!] Install with: pip3 install huhnitor${NC}"
+    if [[ -z "$firmware_file" || ! -f "$firmware_file" ]]; then
+        echo -e "${RED}[!] No firmware file available${NC}"
         pause
         return
     fi
-    
-    # Find ESP8266 device
-    local esp_port=""
-    
-    # Try to find connected ESP8266
-    for port in /dev/ttyUSB* /dev/ttyACM*; do
-        if [[ -e "$port" ]]; then
-            if check_esp8266_response "$port"; then
-                esp_port="$port"
-                break
-            fi
-        fi
-    done
-    
-    if [[ -z "$esp_port" ]]; then
-        # Use default or user-specified
-        esp_port="$ESP8266_PORT"
-        if [[ -z "$esp_port" ]]; then
-            esp_port="/dev/ttyUSB0"
+
+    echo ""
+    echo -e "${YELLOW}[!] Flash process will erase all data on the ESP8266${NC}"
+    echo -e "${YELLOW}[!] Hold FLASH button → press RESET → release FLASH${NC}"
+    echo ""
+    read -p "Ready to flash? (y/N): " confirm
+
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}[*] Erasing flash...${NC}"
+        $esptool_cmd --port "$ESP8266_PORT" erase_flash
+
+        echo ""
+        echo -e "${YELLOW}[*] Writing firmware...${NC}"
+        $esptool_cmd --port "$ESP8266_PORT" --baud 115200 write_flash -fm dout 0x0 "$firmware_file"
+
+        if [[ $? -eq 0 ]]; then
+            echo ""
+            echo -e "${GREEN}[✓] Firmware flashed successfully!${NC}"
+            echo -e "${YELLOW}[*] Press RESET button on device${NC}"
+            echo -e "${YELLOW}[*] Wait 5 seconds for boot, then use Serial Terminal to verify${NC}"
+        else
+            echo -e "${RED}[!] Flash failed. Try again or check connections.${NC}"
         fi
     fi
-    
-    echo -e "${YELLOW}[*] Connecting to ESP8266 on $esp_port${NC}"
-    echo -e "${YELLOW}[*] Press Ctrl+C to exit${NC}"
-    echo ""
-    
-    # Start huhnitor
-    huhnitor -p "$esp_port" -b "$ESP8266_BAUD"
-    
+
+    # Cleanup downloaded firmware
+    [[ "$firmware_file" == "/tmp/"* ]] && rm -f "$firmware_file"
+
     pause
 }
 
-# Web interface access
+# ══════════════════════════════════════════════════════════════════════════════
+# 2. Serial Terminal
+# ══════════════════════════════════════════════════════════════════════════════
+
+esp_serial_terminal() {
+    clear
+    echo -e "${BLUE}ESP8266 Serial Terminal${NC}"
+    echo -e "${GRAY}========================${NC}"
+
+    if [[ ! -e "$ESP8266_PORT" ]]; then
+        echo -e "${RED}[!] No device on $ESP8266_PORT${NC}"
+        esp_select_port || { pause; return; }
+    fi
+
+    echo -e "${YELLOW}[*] Opening serial terminal on $ESP8266_PORT (${ESP8266_BAUD}bps)${NC}"
+    echo ""
+
+    if command -v screen &>/dev/null; then
+        echo -e "${YELLOW}[*] Using 'screen' - Press Ctrl+A then K to exit${NC}"
+        echo ""
+        sleep 1
+        screen "$ESP8266_PORT" "$ESP8266_BAUD"
+    elif command -v minicom &>/dev/null; then
+        echo -e "${YELLOW}[*] Using 'minicom' - Press Ctrl+A then X to exit${NC}"
+        echo ""
+        sleep 1
+        minicom -D "$ESP8266_PORT" -b "$ESP8266_BAUD"
+    elif command -v picocom &>/dev/null; then
+        echo -e "${YELLOW}[*] Using 'picocom' - Press Ctrl+A then Ctrl+X to exit${NC}"
+        echo ""
+        sleep 1
+        picocom -b "$ESP8266_BAUD" "$ESP8266_PORT"
+    else
+        echo -e "${YELLOW}[!] No terminal emulator found. Using basic serial I/O.${NC}"
+        echo -e "${YELLOW}[*] Type commands and press Enter. Type 'exit' to quit.${NC}"
+        echo ""
+
+        stty -F "$ESP8266_PORT" "$ESP8266_BAUD" cs8 -cstopb -parenb raw -echo 2>/dev/null
+
+        # Start background reader
+        cat "$ESP8266_PORT" 2>/dev/null &
+        local reader_pid=$!
+
+        while true; do
+            read -r cmd
+            [[ "$cmd" == "exit" ]] && break
+            printf "${cmd}\r\n" > "$ESP8266_PORT" 2>/dev/null
+        done
+
+        kill $reader_pid 2>/dev/null
+        wait $reader_pid 2>/dev/null
+    fi
+
+    pause
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 3. Web Interface
+# ══════════════════════════════════════════════════════════════════════════════
+
 esp_web_interface() {
     clear
-    echo -e "${BLUE}Access ESP8266 Web Interface${NC}"
-    echo -e "${GRAY}================================${NC}"
-    
-    echo -e "${WHITE}To access the ESP8266 web interface:${NC}"
+    echo -e "${BLUE}ESP8266 Web Interface${NC}"
+    echo -e "${GRAY}======================${NC}"
     echo ""
-    echo -e "${CYAN}1. Connect to WiFi network:${NC}"
-    echo -e "   SSID: pwned"
-    echo -e "   Password: deauther"
+    echo -e "${WHITE}Steps to access the Deauther web interface:${NC}"
     echo ""
-    echo -e "${CYAN}2. Open web browser:${NC}"
-    echo -e "   Navigate to: http://192.168.4.1"
+    echo -e "${CYAN}1.${NC} Connect to the ESP8266 WiFi network:"
+    echo -e "   SSID: ${WHITE}pwned${NC}  (default)"
+    echo -e "   Password: ${WHITE}deauther${NC}  (default)"
     echo ""
-    echo -e "${CYAN}3. Default login:${NC}"
-    echo -e "   Password: deauther"
+    echo -e "${CYAN}2.${NC} Open browser and go to:"
+    echo -e "   ${WHITE}http://192.168.4.1${NC}"
     echo ""
-    echo -e "${YELLOW}[*] If you can't connect:${NC}"
-    echo -e "- Check if ESP8266 is powered on"
-    echo -e "- Try resetting the device"
-    echo -e "- Check WiFi signal strength"
-    echo -e "- Clear browser cache"
-    
-    # Test connectivity
+    echo -e "${CYAN}3.${NC} Accept the disclaimer to access controls"
     echo ""
-    read -p "Test connection to ESP8266? (y/N): " test_connection
-    
-    if [[ "$test_connection" =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}[*] Testing connection to ESP8266...${NC}"
-        
-        # Check if connected to pwned network
-        if ip route | grep -q "192.168.4.0"; then
-            if ping -c 1 192.168.4.1 &>/dev/null; then
-                success "ESP8266 is accessible at http://192.168.4.1"
-                
-                # Try to open in browser
-                if command -v xdg-open &> /dev/null; then
-                    echo -e "${YELLOW}[*] Opening browser...${NC}"
-                    xdg-open http://192.168.4.1
-                elif command -v firefox &> /dev/null; then
-                    firefox http://192.168.4.1 &>/dev/null &
-                else
-                    echo -e "${YELLOW}[*] Manually navigate to: http://192.168.4.1${NC}"
+
+    # Test connectivity if on the right network
+    if ip route 2>/dev/null | grep -q "192.168.4."; then
+        if ping -c 1 -W 2 192.168.4.1 &>/dev/null; then
+            echo -e "${GREEN}[✓] ESP8266 is reachable at 192.168.4.1${NC}"
+
+            if command -v xdg-open &>/dev/null; then
+                read -p "Open in browser? (Y/n): " open_browser
+                if [[ ! "$open_browser" =~ ^[Nn]$ ]]; then
+                    xdg-open http://192.168.4.1 2>/dev/null &
                 fi
-            else
-                warning "ESP8266 not responding to ping"
-                echo -e "${YELLOW}[!] Check device power and connection${NC}"
             fi
         else
-            warning "Not connected to ESP8266 WiFi network"
-            echo -e "${YELLOW}[!] Connect to 'pwned' network first${NC}"
+            echo -e "${YELLOW}[!] On correct network but ESP8266 not responding${NC}"
         fi
+    else
+        echo -e "${YELLOW}[!] Not connected to ESP8266 WiFi network${NC}"
+        echo -e "${YELLOW}[!] Connect to 'pwned' network first${NC}"
     fi
-    
+
     pause
 }
 
-# Deauth attack
+# ══════════════════════════════════════════════════════════════════════════════
+# 4. Scan Networks (via serial)
+# ══════════════════════════════════════════════════════════════════════════════
+
+esp_scan_networks() {
+    clear
+    echo -e "${BLUE}ESP8266 Network Scanner${NC}"
+    echo -e "${GRAY}========================${NC}"
+
+    esp_require_connection || { pause; return; }
+
+    echo ""
+    echo -e "${WHITE}Scan Options:${NC}"
+    echo -e "${CYAN}[1]${NC} Scan Access Points"
+    echo -e "${CYAN}[2]${NC} Scan Stations (clients)"
+    echo -e "${CYAN}[3]${NC} Scan Both (AP + Stations)"
+    echo -e "${CYAN}[4]${NC} Show last scan results"
+    echo ""
+
+    read -p "Select option: " scan_choice
+
+    case $scan_choice in
+        1)
+            echo -e "${YELLOW}[*] Scanning for access points...${NC}"
+            echo -e "${GRAY}(This takes ~5 seconds)${NC}"
+            echo ""
+            esp_send_command_live "scan -ap" 10
+            ;;
+        2)
+            echo -e "${YELLOW}[*] Scanning for stations...${NC}"
+            echo -e "${GRAY}(This takes ~15 seconds)${NC}"
+            echo ""
+            esp_send_command_live "scan -st" 20
+            ;;
+        3)
+            echo -e "${YELLOW}[*] Scanning APs and stations...${NC}"
+            echo -e "${GRAY}(This takes ~20 seconds)${NC}"
+            echo ""
+            esp_send_command_live "scan -ap -st" 25
+            ;;
+        4)
+            echo -e "${YELLOW}[*] Retrieving last scan results...${NC}"
+            echo ""
+            echo -e "${WHITE}--- Access Points ---${NC}"
+            esp_send_command_live "show aps" 5
+            echo ""
+            echo -e "${WHITE}--- Stations ---${NC}"
+            esp_send_command_live "show stations" 5
+            ;;
+        *)
+            echo -e "${RED}[!] Invalid option${NC}"
+            sleep 1
+            return
+            ;;
+    esac
+
+    pause
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 5. Deauth Attack (via serial)
+# ══════════════════════════════════════════════════════════════════════════════
+
 esp_deauth_attack() {
     clear
-    echo -e "${BLUE}Deauth Attack${NC}"
-    echo -e "${GRAY}=============${NC}"
-    
-    echo -e "${WHITE}Deauth Attack Options:${NC}"
-    echo -e "${CYAN}[1]${NC} Select target APs"
-    echo -e "${CYAN}[2]${NC} Deauth all networks"
-    echo -e "${CYAN}[3]${NC} Target specific clients"
-    echo -e "${CYAN}[4]${NC} Continuous deauth mode"
-    echo ""
-    
-    read -p "Select option: " choice
-    
-    case $choice in
-        1) esp_select_targets_deauth ;;
-        2) esp_deauth_all ;;
-        3) esp_target_clients_deauth ;;
-        4) esp_continuous_deauth ;;
-        *) 
-            echo -e "${RED}[!] Invalid option${NC}"
-            sleep 2
-            ;;
-    esac
-}
-
-# Beacon flood attack
-esp_beacon_flood() {
-    clear
-    echo -e "${BLUE}Beacon Flood Attack${NC}"
-    echo -e "${GRAY}====================${NC}"
-    
-    echo -e "${WHITE}Beacon Flood Options:${NC}"
-    echo -e "${CYAN}[1]${NC} Random SSIDs"
-    echo -e "${CYAN}[2]${NC} Clone nearby SSIDs"
-    echo -e "${CYAN}[3]${NC} Custom SSID list"
-    echo -e "${CYAN}[4]${NC} Targeted beacon flood"
-    echo ""
-    
-    read -p "Select option: " choice
-    
-    case $choice in
-        1) esp_random_beacons ;;
-        2) esp_clone_ssids ;;
-        3) esp_custom_beacons ;;
-        4) esp_targeted_beacons ;;
-        *) 
-            echo -e "${RED}[!] Invalid option${NC}"
-            sleep 2
-            ;;
-    esac
-}
-
-# Probe request attack
-esp_probe_attack() {
-    clear
-    echo -e "${BLUE}Probe Request Attack${NC}"
+    echo -e "${BLUE}ESP8266 Deauth Attack${NC}"
     echo -e "${GRAY}======================${NC}"
-    
-    echo -e "${YELLOW}[*] Starting probe request attack...${NC}"
-    echo -e "${YELLOW}[*] This will broadcast probe requests for device discovery${NC}"
-    echo ""
-    
-    # This would send commands to ESP8266
-    echo -e "${YELLOW}[!] Requires connection to ESP8266${NC}"
-    echo -e "${YELLOW}[!] Use web interface or serial monitor to configure${NC}"
-    
-    pause
-}
 
-# Packet monitor
-esp_packet_monitor() {
-    clear
-    echo -e "${BLUE}Packet Monitor${NC}"
-    echo -e "${GRAY}==============${NC}"
-    
-    echo -e "${YELLOW}[*] Starting packet monitor mode...${NC}"
-    echo -e "${YELLOW}[*] Monitor real-time 802.11 traffic${NC}"
-    echo ""
-    
-    # This would start packet monitoring on ESP8266
-    echo -e "${YELLOW}[!] Use ESP8266 web interface Monitor tab${NC}"
-    echo -e "${YELLOW}[!] Or connect via serial: monitor command${NC}"
-    
-    pause
-}
+    esp_require_connection || { pause; return; }
 
-# SSID Manager
-esp_ssid_manager() {
-    clear
-    echo -e "${BLUE}SSID Manager${NC}"
-    echo -e "${GRAY}=============${NC}"
-    
-    echo -e "${WHITE}SSID Management Options:${NC}"
-    echo -e "${CYAN}[1]${NC} Add SSID"
-    echo -e "${CYAN}[2]${NC} View SSID list"
-    echo -e "${CYAN}[3]${NC} Clear SSID list"
-    echo -e "${CYAN}[4]${NC} Import SSID list"
-    echo -e "${CYAN}[5]${NC} Export SSID list"
     echo ""
-    
+    echo -e "${WHITE}Deauth Options:${NC}"
+    echo -e "${CYAN}[1]${NC} Scan & select targets"
+    echo -e "${CYAN}[2]${NC} Deauth all scanned APs"
+    echo -e "${CYAN}[3]${NC} Deauth by AP index"
+    echo -e "${CYAN}[4]${NC} Stop current attack"
+    echo ""
+
     read -p "Select option: " choice
-    
+
     case $choice in
-        1) esp_add_ssid ;;
-        2) esp_view_ssids ;;
-        3) esp_clear_ssids ;;
-        4) esp_import_ssids ;;
-        5) esp_export_ssids ;;
-        *) 
-            echo -e "${RED}[!] Invalid option${NC}"
-            sleep 2
+        1)
+            echo -e "${YELLOW}[*] Scanning for targets...${NC}"
+            esp_send_command_live "scan -ap" 10
+
+            echo ""
+            echo -e "${YELLOW}[*] Showing available APs:${NC}"
+            esp_send_command_live "show aps" 5
+
+            echo ""
+            read -p "Enter AP index to target (or 'all'): " target
+
+            if [[ "$target" == "all" ]]; then
+                echo -e "${YELLOW}[*] Selecting all APs...${NC}"
+                esp_send_command "select -all" 2
+            else
+                echo -e "${YELLOW}[*] Selecting AP $target...${NC}"
+                esp_send_command "select -ap $target" 2
+            fi
+
+            echo ""
+            echo -e "${RED}[*] Starting deauth attack...${NC}"
+            echo -e "${YELLOW}[*] Attack will run until stopped${NC}"
+            esp_send_command "attack -deauth" 2
+
+            echo ""
+            echo -e "${GREEN}[✓] Deauth attack started${NC}"
+            echo -e "${YELLOW}[*] Press Enter to stop...${NC}"
+            read
+
+            esp_send_command "stop" 2
+            echo -e "${GREEN}[✓] Attack stopped${NC}"
             ;;
-    esac
-}
+        2)
+            echo -e "${RED}[!] WARNING: This will deauth ALL networks in range${NC}"
+            read -p "Continue? (y/N): " confirm
+            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                echo -e "${YELLOW}[*] Scanning...${NC}"
+                esp_send_command "scan -ap" 8 >/dev/null
+                sleep 1
 
-# Device configuration
-esp_device_config() {
-    clear
-    echo -e "${BLUE}Device Configuration${NC}"
-    echo -e "${GRAY}====================${NC}"
-    
-    echo -e "${WHITE}Configuration Options:${NC}"
-    echo -e "${CYAN}[1]${NC} Change device name/SSID"
-    echo -e "${CYAN}[2]${NC} Change password"
-    echo -e "${CYAN}[3]${NC} Set channel"
-    echo -e "${CYAN}[4]${NC} Configure LED settings"
-    echo -e "${CYAN}[5]${NC} Reset to defaults"
-    echo -e "${CYAN}[6]${NC} Save configuration"
-    echo ""
-    
-    read -p "Select option: " choice
-    
-    case $choice in
-        1) esp_change_device_name ;;
-        2) esp_change_device_password ;;
-        3) esp_set_device_channel ;;
-        4) esp_configure_led ;;
-        5) esp_reset_defaults ;;
-        6) esp_save_config ;;
-        *) 
-            echo -e "${RED}[!] Invalid option${NC}"
-            sleep 2
+                esp_send_command "select -all" 2 >/dev/null
+                echo -e "${RED}[*] Starting mass deauth...${NC}"
+                esp_send_command "attack -deauth" 2
+
+                echo -e "${GREEN}[✓] Deauth attack running${NC}"
+                echo -e "${YELLOW}[*] Press Enter to stop...${NC}"
+                read
+
+                esp_send_command "stop" 2
+                echo -e "${GREEN}[✓] Attack stopped${NC}"
+            fi
             ;;
-    esac
-}
+        3)
+            read -p "Enter AP index number: " ap_index
+            if [[ "$ap_index" =~ ^[0-9]+$ ]]; then
+                esp_send_command "select -ap $ap_index" 2
+                echo -e "${RED}[*] Starting deauth on AP $ap_index...${NC}"
+                esp_send_command "attack -deauth" 2
 
-# Scripts & automation
-esp_scripts_automation() {
-    clear
-    echo -e "${BLUE}Scripts & Automation${NC}"
-    echo -e "${GRAY}======================${NC}"
-    
-    echo -e "${WHITE}Automation Options:${NC}"
-    echo -e "${CYAN}[1]${NC} Create attack script"
-    echo -e "${CYAN}[2]${NC} Run saved script"
-    echo -e "${CYAN}[3]${NC} View script list"
-    echo -e "${CYAN}[4]${NC} Delete script"
-    echo -e "${CYAN}[5]${NC} Scheduled attacks"
-    echo ""
-    
-    read -p "Select option: " choice
-    
-    case $choice in
-        1) esp_create_script ;;
-        2) esp_run_script ;;
-        3) esp_view_scripts ;;
-        4) esp_delete_script ;;
-        5) esp_scheduled_attacks ;;
-        *) 
-            echo -e "${RED}[!] Invalid option${NC}"
-            sleep 2
+                echo -e "${GREEN}[✓] Deauth attack running${NC}"
+                echo -e "${YELLOW}[*] Press Enter to stop...${NC}"
+                read
+
+                esp_send_command "stop" 2
+                echo -e "${GREEN}[✓] Attack stopped${NC}"
+            else
+                echo -e "${RED}[!] Invalid index${NC}"
+            fi
             ;;
-    esac
-}
-
-# Helper functions for ESP8266
-
-# Check if ESP8266 is responding
-check_esp8266_response() {
-    local port="$1"
-
-    # Try to get a response from ESP8266 (non-destructive)
-    if [[ -e "$port" ]]; then
-        # send a newline and read any immediate output
-        printf "\r\n" > "$port" 2>/dev/null || true
-        timeout 2 head -n 5 "$port" 2>/dev/null | grep -q "help\|scan\|deauth" && return 0 || return 1
-    fi
-    return 1
-}
-
-# Select targets for deauth
-esp_select_targets_deauth() {
-    echo -e "${YELLOW}[*] This feature requires ESP8266 web interface${NC}"
-    echo -e "${YELLOW}[*] Steps:${NC}"
-    echo -e "1. Connect to ESP8266 web interface"
-    echo -e "2. Go to Scan tab"
-    echo -e "3. Click Scan APs"
-    echo -e "4. Select target networks"
-    echo -e "5. Go to Attack tab"
-    echo -e "6. Choose Deauth attack"
-    
-    pause
-}
-
-# Deauth all networks
-esp_deauth_all() {
-    echo -e "${YELLOW}[*] Starting deauth attack on all networks...${NC}"
-    echo -e "${YELLOW}[!] This affects all WiFi networks in range${NC}"
-    echo -e "${YELLOW}[!] Use responsibly and only on authorized networks${NC}"
-    echo ""
-    
-    read -p "Continue? (y/N): " confirm
-    
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}[*] Use ESP8266 web interface to start${NC}"
-        echo -e "${YELLOW}[*] Attack -> Deauth -> Select All -> Start${NC}"
-    fi
-    
-    pause
-}
-
-# Target specific clients
-esp_target_clients_deauth() {
-    echo -e "${YELLOW}[*] Targeted client deauth${NC}"
-    echo -e "${YELLOW}[!] Requires scanning first to identify clients${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] Scan -> Scan Stations -> Select -> Attack${NC}"
-    
-    pause
-}
-
-# Continuous deauth mode
-esp_continuous_deauth() {
-    echo -e "${YELLOW}[*] Continuous deauth mode${NC}"
-    echo -e "${YELLOW}[!] ESP8266 will continuously deauth targets${NC}"
-    echo -e "${YELLOW}[!] Use web interface to configure interval${NC}"
-    
-    pause
-}
-
-# Random beacons
-esp_random_beacons() {
-    read -p "Number of fake APs [default: 100]: " ap_count
-    ap_count=${ap_count:-100}
-    
-    echo -e "${YELLOW}[*] Creating $ap_count random beacon frames...${NC}"
-    echo -e "${YELLOW}[!] Configure in ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] SSIDs -> Random -> Set count -> Start${NC}"
-    
-    pause
-}
-
-# Clone SSIDs
-esp_clone_ssids() {
-    echo -e "${YELLOW}[*] Cloning nearby SSIDs for beacon flood${NC}"
-    echo -e "${YELLOW}[!] Requires scan first${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] Scan -> Clone APs -> Start${NC}"
-    
-    pause
-}
-
-# Custom beacons
-esp_custom_beacons() {
-    read -p "Enter SSID for beacon flood: " custom_ssid
-    read -p "Number of APs [default: 50]: " ap_count
-    ap_count=${ap_count:-50}
-    
-    echo -e "${YELLOW}[*] Creating beacon flood with SSID: $custom_ssid${NC}"
-    echo -e "${YELLOW}[!] Configure in ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] SSIDs -> Add SSID -> Set count -> Start${NC}"
-    
-    pause
-}
-
-# Targeted beacons
-esp_targeted_beacons() {
-    echo -e "${YELLOW}[*] Targeted beacon flood${NC}"
-    echo -e "${YELLOW}[!] Creates beacons for specific networks${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface to configure targets${NC}"
-    
-    pause
-}
-
-# Add SSID
-esp_add_ssid() {
-    read -p "Enter SSID to add: " new_ssid
-    
-    if [[ -n "$new_ssid" ]]; then
-        echo -e "${YELLOW}[*] Adding SSID: $new_ssid${NC}"
-        echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-        echo -e "${YELLOW}[!] SSIDs -> Add -> $new_ssid -> Save${NC}"
-    fi
-    
-    pause
-}
-
-# View SSIDs
-esp_view_ssids() {
-    echo -e "${YELLOW}[*] View SSID list${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] SSIDs tab to view current list${NC}"
-    
-    pause
-}
-
-# Clear SSIDs
-esp_clear_ssids() {
-    echo -e "${YELLOW}[*] Clear SSID list${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] SSIDs -> Clear -> Confirm${NC}"
-    
-    pause
-}
-
-# Import SSIDs
-esp_import_ssids() {
-    read -p "Enter path to SSID list file: " ssid_file
-    
-    if [[ -f "$ssid_file" ]]; then
-        echo -e "${YELLOW}[*] Importing SSIDs from: $ssid_file${NC}"
-        echo -e "${YELLOW}[!] Copy SSIDs to ESP8266 web interface${NC}"
-    else
-        echo -e "${RED}[!] File not found${NC}"
-    fi
-    
-    pause
-}
-
-# Export SSIDs
-esp_export_ssids() {
-    echo -e "${YELLOW}[*] Export SSID list${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] SSIDs -> Export -> Save to file${NC}"
-    
-    pause
-}
-
-# Change device name
-esp_change_device_name() {
-    read -p "Enter new device name (SSID): " new_name
-    
-    if [[ -n "$new_name" ]]; then
-        echo -e "${YELLOW}[*] Changing device name to: $new_name${NC}"
-        echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-        echo -e "${YELLOW}[!] Settings -> SSID -> $new_name -> Save${NC}"
-    fi
-    
-    pause
-}
-
-# Change device password
-esp_change_device_password() {
-    read -p "Enter new password: " new_password
-    
-    if [[ -n "$new_password" ]]; then
-        echo -e "${YELLOW}[*] Changing device password${NC}"
-        echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-        echo -e "${YELLOW}[!] Settings -> Password -> $new_password -> Save${NC}"
-    fi
-    
-    pause
-}
-
-# Set device channel
-esp_set_device_channel() {
-    read -p "Enter channel (1-14): " new_channel
-    
-    if [[ $new_channel -ge 1 && $new_channel -le 14 ]]; then
-        echo -e "${YELLOW}[*] Setting channel to: $new_channel${NC}"
-        echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-        echo -e "${YELLOW}[!] Settings -> Channel -> $new_channel -> Save${NC}"
-    else
-        echo -e "${RED}[!] Invalid channel${NC}"
-    fi
-    
-    pause
-}
-
-# Configure LED
-esp_configure_led() {
-    echo -e "${WHITE}LED Configuration Options:${NC}"
-    echo -e "${CYAN}[1]${NC} Enable activity LED"
-    echo -e "${CYAN}[2]${NC} Disable LED"
-    echo -e "${CYAN}[3]${NC} Custom LED behavior"
-    echo ""
-    
-    read -p "Select option: " led_choice
-    
-    case $led_choice in
-        1|2|3)
-            echo -e "${YELLOW}[*] Configuring LED...${NC}"
-            echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-            echo -e "${YELLOW}[!] Settings -> LED -> Configure -> Save${NC}"
+        4)
+            echo -e "${YELLOW}[*] Stopping attack...${NC}"
+            esp_send_command "stop" 2
+            echo -e "${GREEN}[✓] Attack stopped${NC}"
             ;;
         *)
             echo -e "${RED}[!] Invalid option${NC}"
             ;;
     esac
-    
+
     pause
 }
 
-# Reset to defaults
-esp_reset_defaults() {
-    echo -e "${RED}[!] This will reset all ESP8266 settings${NC}"
-    echo -e "${RED}[!] Including SSID, password, and configuration${NC}"
-    echo ""
-    read -p "Continue? (y/N): " confirm
-    
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}[*] Resetting to defaults...${NC}"
-        echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-        echo -e "${YELLOW}[!] Settings -> Reset -> Confirm${NC}"
-        echo -e "${YELLOW}[!] Or press hardware reset button${NC}"
-    fi
-    
-    pause
-}
-
-# Save configuration
-esp_save_config() {
-    echo -e "${YELLOW}[*] Saving ESP8266 configuration${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] Settings -> Save${NC}"
-    
-    pause
-}
-
-# Create script
-esp_create_script() {
-    echo -e "${YELLOW}[*] Create attack script${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] Scripts tab -> Add Script -> Configure actions${NC}"
-    
-    pause
-}
-
-# Run script
-esp_run_script() {
-    echo -e "${YELLOW}[*] Run saved script${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] Scripts tab -> Select -> Run${NC}"
-    
-    pause
-}
-
-# View scripts
-esp_view_scripts() {
-    echo -e "${YELLOW}[*] View saved scripts${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] Scripts tab to view available scripts${NC}"
-    
-    pause
-}
-
-# Delete script
-esp_delete_script() {
-    echo -e "${YELLOW}[*] Delete script${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] Scripts tab -> Select -> Delete -> Confirm${NC}"
-    
-    pause
-}
-
-# Scheduled attacks
-esp_scheduled_attacks() {
-    echo -e "${YELLOW}[*] Scheduled attacks${NC}"
-    echo -e "${YELLOW}[!] Configure automatic attack timing${NC}"
-    echo -e "${YELLOW}[!] Use ESP8266 web interface:${NC}"
-    echo -e "${YELLOW}[!] Scripts tab -> Add Script -> Set schedule${NC}"
-    
-    pause
-}
 # ══════════════════════════════════════════════════════════════════════════════
-# Serial Command Integration
+# 6. Beacon Flood (via serial)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Send raw command to ESP8266 via serial
-esp_send_serial_command() {
-    local cmd="$1"
-    local port="${2:-$ESP8266_PORT}"
-    local baud="${3:-$ESP8266_BAUD}"
-    
-    if [[ ! -e "$port" ]]; then
-        echo -e "${RED}[!] Serial port not found: $port${NC}"
-        return 1
-    fi
-    
-    if ! command -v stty &>/dev/null; then
-        echo -e "${RED}[!] stty not found${NC}"
-        return 1
-    fi
-    
-    # Configure serial port
-    stty -F "$port" "$baud" cs8 -cstopb -parenb 2>/dev/null || true
-    
-    # Send command
-    echo -e "${cmd}\r\n" > "$port" 2>/dev/null
-    
-    # Read response (non-blocking)
-    timeout 2 cat "$port" 2>/dev/null | head -n 5
-    
-    return 0
-}
+esp_beacon_flood() {
+    clear
+    echo -e "${BLUE}ESP8266 Beacon Flood${NC}"
+    echo -e "${GRAY}=====================${NC}"
 
-# Open interactive serial terminal
-esp_open_terminal() {
-    local port="${1:-$ESP8266_PORT}"
-    local baud="${2:-$ESP8266_BAUD}"
-    
-    if [[ ! -e "$port" ]]; then
-        echo -e "${RED}[!] Serial port not found: $port${NC}"
-        return 1
-    fi
-    
-    echo -e "${YELLOW}[*] Opening serial terminal on $port (${baud}bps)${NC}"
-    echo -e "${YELLOW}[*] Press Ctrl+A then X to exit (if using screen)${NC}"
-    echo -e "${YELLOW}[*] Or Ctrl+C to abort${NC}"
+    esp_require_connection || { pause; return; }
+
     echo ""
-    
-    if command -v screen &>/dev/null; then
-        screen "$port" "$baud"
-    elif command -v minicom &>/dev/null; then
-        minicom -D "$port" -b "$baud"
-    elif command -v picocom &>/dev/null; then
-        picocom -b "$baud" "$port"
-    else
-        echo -e "${RED}[!] No serial terminal found (screen/minicom/picocom)${NC}"
-        echo -e "${YELLOW}[!] Install with: sudo apt install screen${NC}"
-        return 1
-    fi
-}
+    echo -e "${WHITE}Beacon Flood Options:${NC}"
+    echo -e "${CYAN}[1]${NC} Random SSIDs"
+    echo -e "${CYAN}[2]${NC} Custom SSID list"
+    echo -e "${CYAN}[3]${NC} Clone nearby APs"
+    echo -e "${CYAN}[4]${NC} Single SSID flood"
+    echo -e "${CYAN}[5]${NC} Stop current attack"
+    echo ""
 
-# List available serial ports
-esp_list_ports() {
-    echo -e "${WHITE}Available serial ports:${NC}"
-    if [[ -d "/dev" ]]; then
-        ls -1 /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | while read port; do
-            if [[ -e "$port" ]]; then
-                echo -e "  ${CYAN}$port${NC}"
+    read -p "Select option: " choice
+
+    case $choice in
+        1)
+            echo -e "${YELLOW}[*] Enabling random beacon mode...${NC}"
+            esp_send_command "enable random $ESP8266_BAUD" 2
+            echo -e "${RED}[*] Starting beacon flood with random SSIDs...${NC}"
+            esp_send_command "attack -beacon" 2
+
+            echo -e "${GREEN}[✓] Beacon flood running (random SSIDs)${NC}"
+            echo -e "${YELLOW}[*] Press Enter to stop...${NC}"
+            read
+
+            esp_send_command "stop" 2
+            esp_send_command "disable random" 2
+            echo -e "${GREEN}[✓] Attack stopped${NC}"
+            ;;
+        2)
+            echo -e "${YELLOW}[*] Enter SSIDs (one per line, empty line to finish):${NC}"
+            local ssid_count=0
+
+            # Clear existing SSID list on device
+            esp_send_command "remove names -all" 2 >/dev/null
+
+            while true; do
+                read -p "  SSID: " ssid_input
+                [[ -z "$ssid_input" ]] && break
+
+                esp_send_command "add ssid \"$ssid_input\"" 2 >/dev/null
+                ssid_count=$((ssid_count + 1))
+                echo -e "  ${GREEN}[+] Added: $ssid_input${NC}"
+            done
+
+            if [[ $ssid_count -gt 0 ]]; then
+                echo ""
+                echo -e "${RED}[*] Starting beacon flood with $ssid_count SSIDs...${NC}"
+                esp_send_command "attack -beacon" 2
+
+                echo -e "${GREEN}[✓] Beacon flood running${NC}"
+                echo -e "${YELLOW}[*] Press Enter to stop...${NC}"
+                read
+
+                esp_send_command "stop" 2
+                echo -e "${GREEN}[✓] Attack stopped${NC}"
+            else
+                echo -e "${YELLOW}[!] No SSIDs added${NC}"
             fi
-        done
-    fi
+            ;;
+        3)
+            echo -e "${YELLOW}[*] Scanning nearby APs to clone...${NC}"
+            esp_send_command_live "scan -ap" 10
+
+            echo ""
+            echo -e "${YELLOW}[*] Cloning all scanned APs for beacon flood...${NC}"
+            esp_send_command "select -all" 2 >/dev/null
+
+            echo -e "${RED}[*] Starting beacon flood with cloned SSIDs...${NC}"
+            esp_send_command "attack -beacon" 2
+
+            echo -e "${GREEN}[✓] Beacon flood running (cloned APs)${NC}"
+            echo -e "${YELLOW}[*] Press Enter to stop...${NC}"
+            read
+
+            esp_send_command "stop" 2
+            echo -e "${GREEN}[✓] Attack stopped${NC}"
+            ;;
+        4)
+            read -p "Enter SSID to flood: " flood_ssid
+            if [[ -n "$flood_ssid" ]]; then
+                esp_send_command "remove names -all" 2 >/dev/null
+                esp_send_command "add ssid \"$flood_ssid\"" 2 >/dev/null
+
+                echo -e "${RED}[*] Flooding with SSID: $flood_ssid${NC}"
+                esp_send_command "attack -beacon" 2
+
+                echo -e "${GREEN}[✓] Beacon flood running${NC}"
+                echo -e "${YELLOW}[*] Press Enter to stop...${NC}"
+                read
+
+                esp_send_command "stop" 2
+                echo -e "${GREEN}[✓] Attack stopped${NC}"
+            else
+                echo -e "${RED}[!] No SSID provided${NC}"
+            fi
+            ;;
+        5)
+            echo -e "${YELLOW}[*] Stopping attack...${NC}"
+            esp_send_command "stop" 2
+            echo -e "${GREEN}[✓] Attack stopped${NC}"
+            ;;
+        *)
+            echo -e "${RED}[!] Invalid option${NC}"
+            ;;
+    esac
+
+    pause
 }
 
-# Helper constants for colors (if not already defined)
+# ══════════════════════════════════════════════════════════════════════════════
+# 7. Probe Request Attack (via serial)
+# ══════════════════════════════════════════════════════════════════════════════
+
+esp_probe_attack() {
+    clear
+    echo -e "${BLUE}ESP8266 Probe Request Attack${NC}"
+    echo -e "${GRAY}=============================${NC}"
+
+    esp_require_connection || { pause; return; }
+
+    echo ""
+    echo -e "${WHITE}This attack sends probe requests to confuse nearby devices${NC}"
+    echo -e "${WHITE}and can trigger auto-connect on some targets.${NC}"
+    echo ""
+    echo -e "${WHITE}Options:${NC}"
+    echo -e "${CYAN}[1]${NC} Probe with SSID list"
+    echo -e "${CYAN}[2]${NC} Probe with scanned APs"
+    echo -e "${CYAN}[3]${NC} Stop current attack"
+    echo ""
+
+    read -p "Select option: " choice
+
+    case $choice in
+        1)
+            echo -e "${YELLOW}[*] Enter SSIDs for probe requests (empty line to finish):${NC}"
+            esp_send_command "remove names -all" 2 >/dev/null
+            local count=0
+
+            while true; do
+                read -p "  SSID: " probe_ssid
+                [[ -z "$probe_ssid" ]] && break
+
+                esp_send_command "add ssid \"$probe_ssid\"" 2 >/dev/null
+                count=$((count + 1))
+                echo -e "  ${GREEN}[+] Added: $probe_ssid${NC}"
+            done
+
+            if [[ $count -gt 0 ]]; then
+                echo ""
+                echo -e "${RED}[*] Starting probe attack with $count SSIDs...${NC}"
+                esp_send_command "attack -probe" 2
+
+                echo -e "${GREEN}[✓] Probe attack running${NC}"
+                echo -e "${YELLOW}[*] Press Enter to stop...${NC}"
+                read
+
+                esp_send_command "stop" 2
+                echo -e "${GREEN}[✓] Attack stopped${NC}"
+            else
+                echo -e "${YELLOW}[!] No SSIDs added${NC}"
+            fi
+            ;;
+        2)
+            echo -e "${YELLOW}[*] Scanning for APs to use in probe requests...${NC}"
+            esp_send_command_live "scan -ap" 10
+
+            echo ""
+            esp_send_command "select -all" 2 >/dev/null
+            echo -e "${RED}[*] Starting probe attack with scanned APs...${NC}"
+            esp_send_command "attack -probe" 2
+
+            echo -e "${GREEN}[✓] Probe attack running${NC}"
+            echo -e "${YELLOW}[*] Press Enter to stop...${NC}"
+            read
+
+            esp_send_command "stop" 2
+            echo -e "${GREEN}[✓] Attack stopped${NC}"
+            ;;
+        3)
+            echo -e "${YELLOW}[*] Stopping attack...${NC}"
+            esp_send_command "stop" 2
+            echo -e "${GREEN}[✓] Attack stopped${NC}"
+            ;;
+        *)
+            echo -e "${RED}[!] Invalid option${NC}"
+            ;;
+    esac
+
+    pause
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 8. SSID Manager (via serial)
+# ══════════════════════════════════════════════════════════════════════════════
+
+esp_ssid_manager() {
+    clear
+    echo -e "${BLUE}ESP8266 SSID Manager${NC}"
+    echo -e "${GRAY}======================${NC}"
+
+    esp_require_connection || { pause; return; }
+
+    echo ""
+    echo -e "${WHITE}SSID Management:${NC}"
+    echo -e "${CYAN}[1]${NC} View current SSIDs on device"
+    echo -e "${CYAN}[2]${NC} Add SSID"
+    echo -e "${CYAN}[3]${NC} Add multiple SSIDs"
+    echo -e "${CYAN}[4]${NC} Remove all SSIDs"
+    echo -e "${CYAN}[5]${NC} Load SSIDs from file"
+    echo -e "${CYAN}[6]${NC} Save SSIDs to file"
+    echo ""
+
+    read -p "Select option: " choice
+
+    case $choice in
+        1)
+            echo -e "${YELLOW}[*] SSIDs on device:${NC}"
+            echo ""
+            esp_send_command_live "show names" 5
+            ;;
+        2)
+            read -p "Enter SSID to add: " new_ssid
+            if [[ -n "$new_ssid" ]]; then
+                esp_send_command "add ssid \"$new_ssid\"" 2
+                echo -e "${GREEN}[✓] Added: $new_ssid${NC}"
+            fi
+            ;;
+        3)
+            echo -e "${YELLOW}[*] Enter SSIDs (empty line to finish):${NC}"
+            local added=0
+            while true; do
+                read -p "  SSID: " ssid
+                [[ -z "$ssid" ]] && break
+                esp_send_command "add ssid \"$ssid\"" 2 >/dev/null
+                added=$((added + 1))
+                echo -e "  ${GREEN}[+] $ssid${NC}"
+            done
+            echo -e "${GREEN}[✓] Added $added SSIDs${NC}"
+            ;;
+        4)
+            read -p "Remove all SSIDs? (y/N): " confirm
+            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                esp_send_command "remove names -all" 2
+                echo -e "${GREEN}[✓] All SSIDs removed${NC}"
+            fi
+            ;;
+        5)
+            read -p "Enter path to SSID file (one per line): " ssid_file
+            if [[ -f "$ssid_file" ]]; then
+                local loaded=0
+                while IFS= read -r line; do
+                    line=$(echo "$line" | xargs) # trim
+                    [[ -z "$line" || "$line" == "#"* ]] && continue
+                    esp_send_command "add ssid \"$line\"" 1 >/dev/null
+                    loaded=$((loaded + 1))
+                    echo -e "  ${GREEN}[+] $line${NC}"
+                done < "$ssid_file"
+                echo -e "${GREEN}[✓] Loaded $loaded SSIDs from file${NC}"
+            else
+                echo -e "${RED}[!] File not found: $ssid_file${NC}"
+            fi
+            ;;
+        6)
+            local save_file="${ESP_SSID_FILE}"
+            read -p "Save to [$save_file]: " custom_path
+            [[ -n "$custom_path" ]] && save_file="$custom_path"
+
+            mkdir -p "$(dirname "$save_file")"
+            local output
+            output=$(esp_send_command "show names" 5)
+            echo "$output" > "$save_file"
+            echo -e "${GREEN}[✓] SSIDs saved to $save_file${NC}"
+            ;;
+        *)
+            echo -e "${RED}[!] Invalid option${NC}"
+            ;;
+    esac
+
+    pause
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 9. Device Info (via serial)
+# ══════════════════════════════════════════════════════════════════════════════
+
+esp_device_info() {
+    clear
+    echo -e "${BLUE}ESP8266 Device Info${NC}"
+    echo -e "${GRAY}====================${NC}"
+
+    esp_require_connection || { pause; return; }
+
+    echo ""
+    echo -e "${WHITE}System Information:${NC}"
+    echo -e "${GRAY}─────────────────────${NC}"
+    esp_send_command_live "sysinfo" 5
+
+    echo ""
+    echo -e "${WHITE}Current Status:${NC}"
+    echo -e "${GRAY}─────────────────────${NC}"
+    echo -e "  Port: ${CYAN}$ESP8266_PORT${NC}"
+    echo -e "  Baud: ${CYAN}$ESP8266_BAUD${NC}"
+
+    # Show if any attack is running
+    echo ""
+    echo -e "${WHITE}Options:${NC}"
+    echo -e "${CYAN}[1]${NC} Stop all attacks"
+    echo -e "${CYAN}[2]${NC} Reboot device"
+    echo -e "${CYAN}[3]${NC} Back"
+    echo ""
+
+    read -p "Select option: " info_choice
+
+    case $info_choice in
+        1)
+            esp_send_command "stop" 2
+            echo -e "${GREEN}[✓] All attacks stopped${NC}"
+            sleep 1
+            ;;
+        2)
+            echo -e "${YELLOW}[*] Rebooting ESP8266...${NC}"
+            esp_send_command "reboot" 2
+            echo -e "${GREEN}[✓] Reboot command sent${NC}"
+            sleep 3
+            ;;
+        3) return ;;
+    esac
+
+    pause
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Helper: Color constants fallback
+# ══════════════════════════════════════════════════════════════════════════════
+
 if [[ -z "$RED" ]]; then
     RED="\e[31m"
     GREEN="\e[32m"
@@ -863,7 +972,6 @@ if [[ -z "$RED" ]]; then
     NC="\e[0m"
 fi
 
-# Helper function: pause (if not already defined)
 if ! type pause &>/dev/null 2>&1; then
     pause() {
         read -rp "Press Enter to continue..." _tmp
