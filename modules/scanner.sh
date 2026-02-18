@@ -68,24 +68,36 @@ quick_scan() {
         return
     fi
 
-    echo -e "${YELLOW}[*] Starting quick scan for 30 seconds...${NC}"
-    echo -e "${YELLOW}[*] Press Ctrl+C to stop early${NC}"
+    echo -e "${YELLOW}[*] Starting quick scan (15 seconds)...${NC}"
     echo ""
 
     # Kill any existing airodump-ng processes to prevent hanging
     pkill -f airodump-ng 2>/dev/null
-    sleep 1
+    sleep 2
+
+    rm -f /tmp/airodump.* 2>/dev/null
 
     local temp_file
     temp_file=$(mktemp /tmp/airodump.XXXXXX)
 
-    timeout 30 airodump-ng -w "$temp_file" --output-format csv "$interface" 2>/dev/null
+    timeout 17 airodump-ng -w "$temp_file" --output-format csv "$interface" &>/dev/null &
+    local scan_pid=$!
+
+    for i in $(seq 1 15); do
+        echo -ne "\r${YELLOW}[*] Scanning... ${i}/15s${NC}"
+        sleep 1
+    done
+    echo ""
+
+    kill $scan_pid 2>/dev/null
+    wait $scan_pid 2>/dev/null
+    sleep 1
 
     if [[ -f "${temp_file}-01.csv" ]]; then
         parse_and_display_scan "${temp_file}-01.csv"
         rm -f "${temp_file}"*
     else
-        echo -e "${RED}[!] Scan failed or interrupted${NC}"
+        echo -e "${RED}[!] Scan failed - no data collected${NC}"
     fi
 
     pause
@@ -115,23 +127,33 @@ detailed_scan() {
     duration=${duration:-60}
 
     echo -e "${YELLOW}[*] Starting detailed scan for $duration seconds...${NC}"
-    echo -e "${YELLOW}[*] This may take a while...${NC}"
     echo ""
 
     # Kill any existing airodump-ng processes to prevent hanging
     pkill -f airodump-ng 2>/dev/null
-    sleep 1
+    sleep 2
 
     local temp_file
     temp_file=$(mktemp /tmp/airodump.XXXXXX)
 
-    timeout "$duration" airodump-ng -w "$temp_file" --output-format csv --manufacturer "$interface" 2>/dev/null
+    timeout $((duration + 2)) airodump-ng -w "$temp_file" --output-format csv --manufacturer "$interface" &>/dev/null &
+    local scan_pid=$!
+
+    for i in $(seq 1 "$duration"); do
+        echo -ne "\r${YELLOW}[*] Scanning... ${i}/${duration}s${NC}"
+        sleep 1
+    done
+    echo ""
+
+    kill $scan_pid 2>/dev/null
+    wait $scan_pid 2>/dev/null
+    sleep 1
 
     if [[ -f "${temp_file}-01.csv" ]]; then
         parse_and_display_scan "${temp_file}-01.csv" "detailed"
         rm -f "${temp_file}"*
     else
-        echo -e "${RED}[!] Scan failed or interrupted${NC}"
+        echo -e "${RED}[!] Scan failed - no data collected${NC}"
     fi
 
     pause
@@ -175,23 +197,26 @@ channel_scan() {
     esac
 
     echo -e "${YELLOW}[*] Scanning channels $start_chan to $end_chan...${NC}"
+    echo ""
 
     # Kill any existing airodump-ng processes to prevent hanging
     pkill -f airodump-ng 2>/dev/null
-    sleep 1
+    sleep 2
 
     local temp_file
     temp_file=$(mktemp /tmp/airodump.XXXXXX)
 
     for ((channel=start_chan; channel<=end_chan; channel++)); do
         if is_valid_channel "$channel"; then
-            echo -e "${YELLOW}[*] Scanning channel $channel...${NC}"
-            iwconfig "$interface" channel "$channel" 2>/dev/null
-            timeout 10 airodump-ng -c "$channel" -w "${temp_file}_${channel}" --output-format csv "$interface" 2>/dev/null &
-            sleep 10
-            pkill -f "airodump-ng.*${temp_file}_${channel}"
+            echo -ne "\r${YELLOW}[*] Scanning channel $channel...${NC}   "
+            timeout 7 airodump-ng -c "$channel" -w "${temp_file}_${channel}" --output-format csv "$interface" &>/dev/null &
+            local ch_pid=$!
+            sleep 5
+            kill $ch_pid 2>/dev/null
+            wait $ch_pid 2>/dev/null
         fi
     done
+    echo ""
 
     echo -e "${YELLOW}[*] Scan completed. Compiling results...${NC}"
 
@@ -281,15 +306,27 @@ five_ghz_scan() {
     fi
 
     echo -e "${YELLOW}[*] Scanning 5GHz bands (36-165)...${NC}"
+    echo ""
 
     # Kill any existing airodump-ng processes to prevent hanging
     pkill -f airodump-ng 2>/dev/null
-    sleep 1
+    sleep 2
 
     local temp_file
     temp_file=$(mktemp /tmp/airodump.XXXXXX)
 
-    timeout 45 airodump-ng -c 36-165 -w "$temp_file" --output-format csv --band a "$interface" 2>/dev/null
+    timeout 32 airodump-ng --band a -w "$temp_file" --output-format csv "$interface" &>/dev/null &
+    local scan_pid=$!
+
+    for i in $(seq 1 30); do
+        echo -ne "\r${YELLOW}[*] Scanning... ${i}/30s${NC}"
+        sleep 1
+    done
+    echo ""
+
+    kill $scan_pid 2>/dev/null
+    wait $scan_pid 2>/dev/null
+    sleep 1
 
     if [[ -f "${temp_file}-01.csv" ]]; then
         parse_and_display_scan "${temp_file}-01.csv"
