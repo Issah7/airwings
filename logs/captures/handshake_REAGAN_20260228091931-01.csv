@@ -1,0 +1,8 @@
+
+BSSID, First time seen, Last time seen, channel, Speed, Privacy, Cipher, Authentication, Power, # beacons, # IV, LAN IP, ID-length, ESSID, Key
+D4:01:C3:DB:66:A6, 2026-02-28 09:19:31, 2026-02-28 09:19:55,  8, 270, WPA2 WPA, CCMP, PSK, -64,       97,     2582,   0.  0.  0.  0,   6, REAGAN, 
+
+Station MAC, First time seen, Last time seen, Power, # packets, BSSID, Probed ESSIDs
+FA:8B:02:83:58:56, 2026-02-28 09:19:31, 2026-02-28 09:19:51, -67,     1210, D4:01:C3:DB:66:A6,
+BC:F1:05:99:AC:4B, 2026-02-28 09:19:37, 2026-02-28 09:19:53, -64,     1412, D4:01:C3:DB:66:A6,
+
