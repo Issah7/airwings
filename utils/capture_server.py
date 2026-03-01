@@ -180,16 +180,17 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
             chosen_path = 'index.html'
             
             # Check for specialized portal folders
-            if 'android' in ua:
-                android_path = os.path.join(PORTAL_DIR, 'android', 'index.html')
-                print(f"{CYAN}[DEBUG]{NC} Checking android: {android_path}, exists={os.path.exists(android_path)}")
-                if os.path.exists(android_path):
-                    chosen_path = 'android/index.html'
-            elif any(x in ua for x in ('iphone', 'ipad', 'ios')):
+            # iOS check first (more specific) since some iOS UAs may contain "android" in string
+            if any(x in ua for x in ('iphone', 'ipad', 'ios', 'cpu iphone', 'cpu ipad')):
                 ios_path = os.path.join(PORTAL_DIR, 'ios', 'index.html')
                 print(f"{CYAN}[DEBUG]{NC} Checking ios: {ios_path}, exists={os.path.exists(ios_path)}")
                 if os.path.exists(ios_path):
                     chosen_path = 'ios/index.html'
+            elif 'android' in ua:
+                android_path = os.path.join(PORTAL_DIR, 'android', 'index.html')
+                print(f"{CYAN}[DEBUG]{NC} Checking android: {android_path}, exists={os.path.exists(android_path)}")
+                if os.path.exists(android_path):
+                    chosen_path = 'android/index.html'
             
             # Try to serve the chosen file
             file_path = os.path.join(PORTAL_DIR, chosen_path)
