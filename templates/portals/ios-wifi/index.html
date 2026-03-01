@@ -146,7 +146,7 @@
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
-        const ssid = urlParams.get('ssid') || 'Wi-Fi';
+        const ssid = urlParams.get('ssid') || 'NETWORK';
         document.getElementById('ssidTitle').textContent = 'Join \u201c' + ssid + '\u201d';
 
         document.getElementById('joinBtn').addEventListener('click', function () {
@@ -161,7 +161,9 @@
             .then(r => r.text())
             .then(html => {
                 if (html.includes('Connected') || html.includes('checkmark')) {
-                    window.location.href = '/success.html';
+                    // Show brief success, then trigger captive portal detection
+                    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#34C759;color:white;font-family:-apple-system,sans-serif;font-size:24px;">✓ Connected</div>';
+                    setTimeout(() => { window.location.href = '/generate_204'; }, 1000);
                 } else {
                     document.getElementById('errorMsg').classList.add('show');
                 }
