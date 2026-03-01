@@ -169,6 +169,32 @@ sudo airwings
 | **Corporate** | Business environments | Professional design |
 | **Router Config** | Technical environments | System admin theme |
 
+### Automatic Mobile Template Detection
+
+By default the captive portal server will include both **iOS** and **Android** login pages and automatically
+select the appropriate one based on the **User‑Agent** string of the connecting device. You do not need to
+choose a template manually – the system detects the phone type and serves the matching portal.
+
+If you prefer to force a specific design you can still set the environment variable or configuration:
+
+```bash
+# force iOS look
+export PORTAL_TEMPLATE=ios
+# force Android look
+export PORTAL_TEMPLATE=android
+# use the legacy facebook-wifi, hotel-portal, etc.
+export PORTAL_TEMPLATE=facebook-wifi
+```
+
+To enable automatic detection even in the Evil‑Twin startup flow make sure the configuration key is set:
+
+```ini
+# config/airwings.conf
+DEFAULT_PORTAL_TEMPLATE="auto"
+```
+
+(The startup scripts also default to auto when the variable is unset.)
+
 ### Custom Portal Creation
 
 ```bash
