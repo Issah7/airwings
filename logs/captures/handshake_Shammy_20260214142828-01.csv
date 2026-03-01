@@ -1,7 +1,0 @@
-
-BSSID, First time seen, Last time seen, channel, Speed, Privacy, Cipher, Authentication, Power, # beacons, # IV, LAN IP, ID-length, ESSID, Key
-E8:65:D4:31:3D:58, 2026-02-14 14:28:29, 2026-02-14 14:29:23,  5, 270, WPA2, CCMP, PSK, -67,      431,      258,   0.  0.  0.  0,   6, Shammy, 
-
-Station MAC, First time seen, Last time seen, Power, # packets, BSSID, Probed ESSIDs
-32:B3:6C:DD:FB:42, 2026-02-14 14:28:29, 2026-02-14 14:29:22, -71,      109, E8:65:D4:31:3D:58,
-

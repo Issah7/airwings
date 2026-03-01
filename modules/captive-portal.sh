@@ -108,34 +108,38 @@ portal_templates() {
         echo -e "${GRAY}=======================${NC}"
         
         echo -e "${WHITE}Available Templates:${NC}"
-        echo -e "${CYAN}[1]${NC} Facebook WiFi"
-        echo -e "${CYAN}[2]${NC} Google WiFi"
-        echo -e "${CYAN}[3]${NC} Hotel WiFi Portal"
-        echo -e "${CYAN}[4]${NC} Airport WiFi"
-        echo -e "${CYAN}[5]${NC} Starbucks Coffee Shop"
-        echo -e "${CYAN}[6]${NC} University Campus WiFi"
-        echo -e "${CYAN}[7]${NC} Corporate Login"
-        echo -e "${CYAN}[8]${NC} Router Configuration"
-        echo -e "${CYAN}[9]${NC} Telco Provider Portal"
-        echo -e "${CYAN}[10]${NC} Mall/Shopping Center"
-        echo -e "${CYAN}[11]${NC} Generic Public WiFi"
+        echo -e "${CYAN}[1]${NC} iOS WiFi Login        ${GRAY}(Native iPhone popup)${NC}"
+        echo -e "${CYAN}[2]${NC} Android WiFi Login    ${GRAY}(Native Android popup)${NC}"
+        echo -e "${CYAN}[3]${NC} Facebook WiFi"
+        echo -e "${CYAN}[4]${NC} Google WiFi"
+        echo -e "${CYAN}[5]${NC} Hotel WiFi Portal"
+        echo -e "${CYAN}[6]${NC} Airport WiFi"
+        echo -e "${CYAN}[7]${NC} Starbucks Coffee Shop"
+        echo -e "${CYAN}[8]${NC} University Campus WiFi"
+        echo -e "${CYAN}[9]${NC} Corporate Login"
+        echo -e "${CYAN}[10]${NC} Router Configuration"
+        echo -e "${CYAN}[11]${NC} Telco Provider Portal"
+        echo -e "${CYAN}[12]${NC} Mall/Shopping Center"
+        echo -e "${CYAN}[13]${NC} Generic Public WiFi"
         echo -e "${CYAN}[0]${NC} Back"
         echo ""
         
         read -p "Select template: " choice
         
         case $choice in
-            1) load_template "facebook-wifi" ;;
-            2) load_template "google-wifi" ;;
-            3) load_template "hotel-portal" ;;
-            4) load_template "airport-portal" ;;
-            5) load_template "starbucks-portal" ;;
-            6) load_template "university-portal" ;;
-            7) load_template "corporate-login" ;;
-            8) load_template "router-config" ;;
-            9) load_template "telco-portal" ;;
-            10) load_template "mall-portal" ;;
-            11) load_template "generic-public" ;;
+            1) load_template "ios-wifi" ;;
+            2) load_template "android-wifi" ;;
+            3) load_template "facebook-wifi" ;;
+            4) load_template "google-wifi" ;;
+            5) load_template "hotel-portal" ;;
+            6) load_template "airport-portal" ;;
+            7) load_template "starbucks-portal" ;;
+            8) load_template "university-portal" ;;
+            9) load_template "corporate-login" ;;
+            10) load_template "router-config" ;;
+            11) load_template "telco-portal" ;;
+            12) load_template "mall-portal" ;;
+            13) load_template "generic-public" ;;
             0) break ;;
             *) 
                 echo -e "${RED}[!] Invalid option${NC}"
