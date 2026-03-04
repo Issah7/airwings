@@ -1,0 +1,8 @@
+
+BSSID, First time seen, Last time seen, channel, Speed, Privacy, Cipher, Authentication, Power, # beacons, # IV, LAN IP, ID-length, ESSID, Key
+B4:0F:3B:4E:13:B0, 2026-03-02 07:15:30, 2026-03-02 07:16:18, 11, 130, WPA2, CCMP, PSK, -70,      354,      327,   0.  0.  0.  0,  13, NW-Associates, 
+
+Station MAC, First time seen, Last time seen, Power, # packets, BSSID, Probed ESSIDs
+0E:3B:B3:D2:E0:C8, 2026-03-02 07:15:30, 2026-03-02 07:16:14, -83,      394, B4:0F:3B:4E:13:B0,
+A4:C4:94:0D:AD:27, 2026-03-02 07:15:35, 2026-03-02 07:16:08, -75,      489, B4:0F:3B:4E:13:B0,
+

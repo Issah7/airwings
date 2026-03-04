@@ -1,0 +1,32 @@
+===============================================
+Wireless Security Toolkit Report
+Generated: Tue Mar  3 04:17:29 PM EST 2026
+===============================================
+
+System Information:
+Linux kali 6.17.10+kali-amd64 #1 SMP PREEMPT_DYNAMIC Kali 6.17.10-1kali1 (2025-12-08) x86_64 GNU/Linux
+
+Captures:
+-rw-r--r-- 1 root root  3.8K Mar  2 07:16 handshake_NW-Associates_20260302071530-01.kismet.netxml
+-rw-r--r-- 1 root root  5.8M Mar  2 07:16 handshake_NW-Associates_20260302071530-01.log.csv
+-rw-r--r-- 1 root root   631 Mar  2 07:16 handshake_NW-Associates_20260302071530-clean.cap
+-rw-r--r-- 1 root root 1016K Mar  1 08:50 handshake_TECNO-TR109C-EC1A_20260301084847-01.cap
+-rw-r--r-- 1 root root   583 Mar  1 08:50 handshake_TECNO-TR109C-EC1A_20260301084847-01.csv
+-rw-r--r-- 1 root root   412 Mar  1 09:05 handshake_TECNO-TR109C-EC1A_20260301084847-01.hc22000
+-rw-r--r-- 1 root root   598 Mar  1 08:50 handshake_TECNO-TR109C-EC1A_20260301084847-01.kismet.csv
+-rw-r--r-- 1 root root  3.8K Mar  1 08:50 handshake_TECNO-TR109C-EC1A_20260301084847-01.kismet.netxml
+-rw-r--r-- 1 root root  1.8M Mar  1 08:50 handshake_TECNO-TR109C-EC1A_20260301084847-01.log.csv
+-rw-r--r-- 1 root root   555 Mar  1 08:50 handshake_TECNO-TR109C-EC1A_20260301084847-clean.cap
+
+Credentials:
+-rw-r--r-- 1 root root  377 Mar  1 11:23 wifi_passwords_20260301112233.txt
+-rw-r--r-- 1 root root  700 Mar  1 13:44 wifi_passwords_20260301134253.txt
+-rw-r--r-- 1 root root  379 Mar  1 14:06 wifi_passwords_20260301140408.txt
+-rw-r--r-- 1 root root  379 Mar  1 14:11 wifi_passwords_20260301141018.txt
+-rw-r--r-- 1 root root  379 Mar  1 14:22 wifi_passwords_20260301142214.txt
+-rw-r--r-- 1 root root  335 Mar  1 16:33 wifi_passwords_20260301162919.txt
+-rw-r--r-- 1 root root  700 Mar  1 16:36 wifi_passwords_20260301163509.txt
+-rw-r--r-- 1 root root  700 Mar  1 16:55 wifi_passwords_20260301165405.txt
+-rw-r--r-- 1 root root  335 Mar  1 16:58 wifi_passwords_20260301165758.txt
+-rw-r--r-- 1 root root  365 Mar  2 06:42 wifi_passwords_20260302064113.txt
+
